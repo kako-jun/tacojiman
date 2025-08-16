@@ -35,7 +35,7 @@ export class TitleScene extends Phaser.Scene {
     // サブタイトル
     this.subtitleText = this.add.text(width / 2, height / 2, '起こしに来た幼馴染が多すぎる', {
       fontSize: '20px',
-      color: '#ffeeaa',
+      color: '#ddccaa', // より落ち着いた色に変更
       fontFamily: 'monospace',
       stroke: '#000000',
       strokeThickness: 2
@@ -100,9 +100,14 @@ export class TitleScene extends Phaser.Scene {
 
     // 朝の光の表現（進捗が高いほど明るく）
     if (this.progressLevel > 3) {
-      const lightAlpha = (this.progressLevel - 3) / 7 * 0.3
-      this.backgroundGraphics.fillStyle(0xffd700, lightAlpha)
-      this.backgroundGraphics.fillCircle(width * 0.8, height * 0.2, 100)
+      const lightAlpha = (this.progressLevel - 3) / 7 * 0.15 // アルファ値を半分に
+      // 優しいオレンジ色の朝焼け
+      this.backgroundGraphics.fillStyle(0xff8844, lightAlpha) 
+      this.backgroundGraphics.fillCircle(width * 0.8, height * 0.2, 120)
+      
+      // さらに柔らかい外側の光
+      this.backgroundGraphics.fillStyle(0xffaa66, lightAlpha * 0.5)
+      this.backgroundGraphics.fillCircle(width * 0.8, height * 0.2, 180)
     }
   }
 }

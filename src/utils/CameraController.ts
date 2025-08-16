@@ -8,6 +8,9 @@ export class CameraController {
   private zoomTarget: { x: number; y: number } | null = null
   private homeX: number
   private homeY: number
+  private isZooming: boolean = false
+  private zoomTween: Phaser.Tweens.Tween | null = null
+  private isZoomingOut: boolean = false
 
   constructor(scene: Phaser.Scene, homeX: number, homeY: number) {
     this.scene = scene
@@ -21,50 +24,68 @@ export class CameraController {
   }
 
   public startZoomIn(targetX: number, targetY: number, zoomLevel: number = 2) {
-    if (this.isZoomedIn) return
+    if (this.isZooming) return
 
+    this.isZooming = true
     this.isZoomedIn = true
     this.zoomLevel = zoomLevel
     this.zoomTarget = { x: targetX, y: targetY }
 
-    // ズームインアニメーション
+    // シンプルにタップ位置を中心にズーム
     this.scene.tweens.add({
       targets: this.camera,
       zoom: zoomLevel,
-      duration: 300,
-      ease: 'Power2'
+      duration: 400, // ズームは高速
+      ease: 'Linear'
     })
 
-    // カメラ移動アニメーション
-    this.scene.tweens.add({
+    // タップ位置を中心にパン
+    this.zoomTween = this.scene.tweens.add({
       targets: this.camera,
-      scrollX: targetX - this.camera.width / 2 / zoomLevel,
-      scrollY: targetY - this.camera.height / 2 / zoomLevel,
-      duration: 300,
-      ease: 'Power2'
+      scrollX: targetX - this.camera.width / 2,
+      scrollY: targetY - this.camera.height / 2,
+      duration: 800, // パンは低速
+      ease: 'Linear'
     })
   }
 
+  public stopZoomIn() {
+    if (this.zoomTween) {
+      this.zoomTween.stop()
+      this.zoomTween = null
+    }
+    this.isZooming = false
+  }
+
   public zoomOut() {
+    this.stopZoomIn() // ズーム中のアニメーションを停止
+    
     if (!this.isZoomedIn) return
 
+    this.isZoomingOut = true
     this.isZoomedIn = false
     this.zoomTarget = null
 
-    // ホーム位置に戻るアニメーション
+    // ズームアニメーション（高速）
     this.scene.tweens.add({
       targets: this.camera,
       zoom: 1,
-      duration: 400,
-      ease: 'Power2'
+      duration: 200, // ズームアウトは高速
+      ease: 'Linear'
     })
 
+    // 家の中心へパン（低速）
     this.scene.tweens.add({
       targets: this.camera,
       scrollX: this.homeX - this.camera.width / 2,
       scrollY: this.homeY - this.camera.height / 2,
-      duration: 400,
-      ease: 'Power2'
+      duration: 400, // パンは低速
+      ease: 'Linear',
+      onComplete: () => {
+        // 最終的に確実に家の中心に
+        this.camera.centerOn(this.homeX, this.homeY)
+        this.isZoomingOut = false
+      }
     })
   }
 
@@ -85,6 +106,10 @@ export class CameraController {
 
   public getIsZoomedIn(): boolean {
     return this.isZoomedIn
+  }
+
+  public getIsZoomingOut(): boolean {
+    return this.isZoomingOut
   }
 
   public getCurrentZoom(): number {
@@ -128,5 +153,8 @@ export class CameraController {
 
   public destroy() {
     this.scene.tweens.killTweensOf(this.camera)
+    this.isZooming = false
+    this.isZoomingOut = false
+    this.zoomTween = null
   }
 }

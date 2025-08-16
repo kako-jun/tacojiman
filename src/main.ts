@@ -36,7 +36,10 @@ class Game extends Phaser.Game {
       },
       render: {
         pixelArt: true,
-        antialias: false
+        antialias: false,
+        powerPreference: 'high-performance',
+        mipmapFilter: 'LINEAR_MIPMAP_LINEAR',
+        roundPixels: true
       }
     }
 

@@ -69,34 +69,160 @@ export class GameScene extends Phaser.Scene {
     this.gameStartMorningTime = `${startHour}:${startMinute.toString().padStart(2, '0')} AM`
   }
 
+  private updateMorningTime() {
+    // ゲーム内時間の進行（3分で30分経過 = 10倍速）
+    const elapsedGameMinutes = (180 - this.gameTimeRemaining) * 10
+    
+    // 開始時刻から計算
+    const startTimeMatch = this.gameStartMorningTime.match(/(\d+):(\d+) AM/)
+    if (!startTimeMatch) return
+    
+    const startHour = parseInt(startTimeMatch[1])
+    const startMinute = parseInt(startTimeMatch[2])
+    
+    // 総分数で計算
+    const totalStartMinutes = startHour * 60 + startMinute
+    const currentTotalMinutes = totalStartMinutes + elapsedGameMinutes
+    
+    // 時間と分に変換
+    const currentHour = Math.floor(currentTotalMinutes / 60) % 12 || 12
+    const currentMinute = Math.floor(currentTotalMinutes % 60)
+    
+    this.clockDisplay.setText(`${currentHour}:${currentMinute.toString().padStart(2, '0')} AM`)
+  }
+
   private createWireframeMap(width: number, height: number) {
+    // 背景マップ用のコンテナ（回転用）
+    const mapContainer = this.add.container(width / 2, height / 2)
+    
+    // マップを大きめに生成（回転時に端が見えないように）
+    const mapSize = Math.max(width, height) * 1.5
     const graphics = this.add.graphics()
     
     graphics.fillStyle(0x004400)
-    graphics.fillRect(0, 0, width, height)
+    graphics.fillRect(-mapSize / 2, -mapSize / 2, mapSize, mapSize)
     
     const tileSize = 60
-    const tilesX = Math.ceil(width / tileSize)
-    const tilesY = Math.ceil(height / tileSize)
+    const tilesX = Math.ceil(mapSize / tileSize)
+    const tilesY = Math.ceil(mapSize / tileSize)
     
+    // チクタクバンバン風の道路接続システム
+    const tileMap: Array<Array<{ terrainType: number; connections: { north: boolean; south: boolean; east: boolean; west: boolean } }>> = []
+    
+    // 初期化
+    for (let x = 0; x < tilesX; x++) {
+      tileMap[x] = []
+      for (let y = 0; y < tilesY; y++) {
+        const terrainType = Math.floor(Math.random() * 7) // 7種類の地形
+        tileMap[x][y] = {
+          terrainType,
+          connections: { north: false, south: false, east: false, west: false }
+        }
+      }
+    }
+    
+    // 道路接続の生成
+    this.generateRoadConnections(tileMap, tilesX, tilesY)
+    
+    // タイル描画
     for (let x = 0; x < tilesX; x++) {
       for (let y = 0; y < tilesY; y++) {
-        const terrainType = Math.floor(Math.random() * 4)
-        let color: number
+        const tile = tileMap[x][y]
+        const tileX = x * tileSize - mapSize / 2
+        const tileY = y * tileSize - mapSize / 2
         
-        switch (terrainType) {
-          case 0: color = 0x000088; break
-          case 1: color = 0x0088ff; break
-          case 2: color = 0x008800; break
-          case 3: color = 0x666666; break
+        // 地形色
+        let color: number
+        switch (tile.terrainType) {
+          case 0: color = 0x000088; break // 海
+          case 1: color = 0x0088ff; break // 川
+          case 2: color = 0x008800; break // 田んぼ
+          case 3: color = 0x666666; break // 道路
+          case 4: color = 0x884400; break // 畑
+          case 5: color = 0x444444; break // 駅
+          case 6: color = 0x228822; break // 民家
           default: color = 0x004400; break
         }
         
         graphics.fillStyle(color, 0.7)
-        graphics.fillRect(x * tileSize, y * tileSize, tileSize - 2, tileSize - 2)
+        graphics.fillRect(tileX, tileY, tileSize - 2, tileSize - 2)
         graphics.lineStyle(1, 0xffffff, 0.3)
-        graphics.strokeRect(x * tileSize, y * tileSize, tileSize - 2, tileSize - 2)
+        graphics.strokeRect(tileX, tileY, tileSize - 2, tileSize - 2)
+        
+        // 道路接続の描画
+        this.drawRoadConnections(graphics, tileX, tileY, tileSize, tile.connections)
       }
+    }
+    
+    mapContainer.add(graphics)
+    
+    // 背景回転を一時停止（デバッグ用）
+    // const rotationDirection = Math.random() > 0.5 ? 1 : -1
+    // 
+    // this.tweens.add({
+    //   targets: mapContainer,
+    //   rotation: rotationDirection * Math.PI * 2,
+    //   duration: 120000 + Math.random() * 60000, // 2〜3分で1回転（より遅く）
+    //   repeat: -1,
+    //   ease: 'None'
+    // })
+  }
+
+  private generateRoadConnections(tileMap: any[][], tilesX: number, tilesY: number) {
+    // 道路・川・鉄道タイプのタイルに接続を生成
+    for (let x = 0; x < tilesX; x++) {
+      for (let y = 0; y < tilesY; y++) {
+        const currentTile = tileMap[x][y]
+        
+        // 道路系タイル（道路、川、駅）の場合、隣接タイルとの接続を確率的に生成
+        if ([1, 3, 5].includes(currentTile.terrainType)) {
+          // 上
+          if (y > 0 && Math.random() > 0.6) {
+            const neighbor = tileMap[x][y - 1]
+            if ([1, 3, 5].includes(neighbor.terrainType)) {
+              currentTile.connections.north = true
+              neighbor.connections.south = true
+            }
+          }
+          
+          // 右
+          if (x < tilesX - 1 && Math.random() > 0.6) {
+            const neighbor = tileMap[x + 1][y]
+            if ([1, 3, 5].includes(neighbor.terrainType)) {
+              currentTile.connections.east = true
+              neighbor.connections.west = true
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private drawRoadConnections(graphics: Phaser.GameObjects.Graphics, tileX: number, tileY: number, tileSize: number, connections: any) {
+    const centerX = tileX + tileSize / 2
+    const centerY = tileY + tileSize / 2
+    const roadWidth = 8
+    
+    graphics.lineStyle(roadWidth, 0xaaaaaa, 0.8)
+    
+    // 道路の描画
+    if (connections.north) {
+      graphics.lineBetween(centerX, centerY, centerX, tileY)
+    }
+    if (connections.south) {
+      graphics.lineBetween(centerX, centerY, centerX, tileY + tileSize)
+    }
+    if (connections.east) {
+      graphics.lineBetween(centerX, centerY, tileX + tileSize, centerY)
+    }
+    if (connections.west) {
+      graphics.lineBetween(centerX, centerY, tileX, centerY)
+    }
+    
+    // 中心の交差点
+    if (connections.north || connections.south || connections.east || connections.west) {
+      graphics.fillStyle(0xaaaaaa, 0.8)
+      graphics.fillCircle(centerX, centerY, roadWidth / 2)
     }
   }
 
@@ -107,7 +233,7 @@ export class GameScene extends Phaser.Scene {
       fontFamily: 'monospace',
       stroke: '#000000',
       strokeThickness: 2
-    })
+    }).setScrollFactor(0) // ズームの影響を受けない
     
     this.timeDisplay = this.add.text(width - 20, 20, `${this.gameTimeRemaining}s`, {
       fontSize: '20px',
@@ -115,7 +241,7 @@ export class GameScene extends Phaser.Scene {
       fontFamily: 'monospace',
       stroke: '#000000',
       strokeThickness: 2
-    }).setOrigin(1, 0)
+    }).setOrigin(1, 0).setScrollFactor(0) // ズームの影響を受けない
     
     this.scoreDisplay = this.add.text(20, height - 80, `Score: ${this.currentScore}`, {
       fontSize: '18px',
@@ -123,7 +249,7 @@ export class GameScene extends Phaser.Scene {
       fontFamily: 'monospace',
       stroke: '#000000',
       strokeThickness: 2
-    })
+    }).setScrollFactor(0) // ズームの影響を受けない
 
     this.bombStockDisplay = this.add.text(20, height - 50, `Bomb: ${this.bombStock}`, {
       fontSize: '16px',
@@ -131,16 +257,25 @@ export class GameScene extends Phaser.Scene {
       fontFamily: 'monospace',
       stroke: '#000000',
       strokeThickness: 2
-    })
+    }).setScrollFactor(0) // ズームの影響を受けない
   }
 
   private setupInput() {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      // ズームアウト中は新しいタップを無視
+      if (this.cameraController.getIsZoomingOut()) {
+        return
+      }
+      
       this.isLongPress = false
+      
+      // タップ開始と同時にズーム開始
+      const worldPoint = this.cameraController.getWorldPoint(pointer.x, pointer.y)
+      this.cameraController.startZoomIn(worldPoint.x, worldPoint.y, 2.5)
       
       this.longPressTimer = this.time.delayedCall(300, () => {
         this.isLongPress = true
-        this.handleLongPressStart(pointer)
+        // 300ms後はズームが既に開始されているので何もしない
       })
     })
     
@@ -149,6 +284,9 @@ export class GameScene extends Phaser.Scene {
         this.longPressTimer.remove()
         this.longPressTimer = null
       }
+      
+      // タップを離したら必ずズームアウト開始
+      this.cameraController.zoomOut()
       
       if (this.isLongPress) {
         this.handleLongPressEnd(pointer)
@@ -353,8 +491,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handleLongPressStart(pointer: Phaser.Input.Pointer) {
-    const worldPoint = this.cameraController.getWorldPoint(pointer.x, pointer.y)
-    this.cameraController.startZoomIn(worldPoint.x, worldPoint.y, 2.5)
+    // ズームは既にpointerdownで開始されているので何もしない
   }
 
   private handleLongPressEnd(pointer: Phaser.Input.Pointer) {
@@ -363,7 +500,7 @@ export class GameScene extends Phaser.Scene {
       const worldPoint = this.cameraController.getWorldPoint(pointer.x, pointer.y)
       this.performContinuousAttack(worldPoint.x, worldPoint.y)
     }
-    this.cameraController.zoomOut()
+    // ズームアウトはpointerupで既に呼ばれているので削除
   }
 
   private checkHouseClick(x: number, y: number): boolean {
@@ -574,6 +711,9 @@ export class GameScene extends Phaser.Scene {
       callback: () => {
         this.gameTimeRemaining--
         this.timeDisplay.setText(`${this.gameTimeRemaining}s`)
+        
+        // 朝の時刻を更新（ゲーム内時間進行）
+        this.updateMorningTime()
         
         // ボム自動回復（1分、2分時点）
         if ((this.gameTimeRemaining === 120 || this.gameTimeRemaining === 60) && this.bombStock === 0) {

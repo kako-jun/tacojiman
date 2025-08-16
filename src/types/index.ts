@@ -39,7 +39,7 @@ export const BombDataSchema = z.object({
   type: BombTypeSchema,
   name: z.string(),
   description: z.string(),
-  damage: z.number().positive(),
+  damage: z.number().min(0), // 0以上を許可（分身の術などサポート系のため）
   duration: z.number().optional(), // セントリーガンなどの持続時間
   range: z.number().positive(),
 })
