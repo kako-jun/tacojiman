@@ -20,7 +20,8 @@ export class CameraController {
     
     // カメラの初期設定
     this.camera.setZoom(1)
-    this.camera.centerOn(homeX, homeY)
+    this.camera.scrollX = homeX - this.camera.width / 2
+    this.camera.scrollY = homeY - this.camera.height / 2
   }
 
   public startZoomIn(targetX: number, targetY: number, zoomLevel: number = 3) {
@@ -45,7 +46,9 @@ export class CameraController {
         const currentCenterX = this.homeX + (targetX - this.homeX) * progress
         const currentCenterY = this.homeY + (targetY - this.homeY) * progress
         
-        this.camera.centerOn(currentCenterX, currentCenterY)
+        // centerOnの代わりにscrollX/Yを直接設定
+        this.camera.scrollX = currentCenterX - this.camera.width / 2
+        this.camera.scrollY = currentCenterY - this.camera.height / 2
       }
     })
   }
@@ -84,7 +87,9 @@ export class CameraController {
         const currentCenterX = startCenterX + (this.homeX - startCenterX) * progress
         const currentCenterY = startCenterY + (this.homeY - startCenterY) * progress
         
-        this.camera.centerOn(currentCenterX, currentCenterY)
+        // centerOnの代わりにscrollX/Yを直接設定
+        this.camera.scrollX = currentCenterX - this.camera.width / 2
+        this.camera.scrollY = currentCenterY - this.camera.height / 2
       },
       onComplete: () => {
         this.zoomTarget = null

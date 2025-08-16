@@ -31,6 +31,14 @@ export class EnemyManager {
       callbackScope: this,
       loop: true
     })
+    
+    // 敵の位置を定期的にチェック
+    this.scene.time.addEvent({
+      delay: 100, // 100msごと
+      callback: this.checkEnemyPositions,
+      callbackScope: this,
+      loop: true
+    })
   }
 
   public stopSpawning() {
@@ -162,6 +170,28 @@ export class EnemyManager {
     this.enemies.forEach(enemy => enemy.resumeMovement())
   }
 
+  private checkEnemyPositions() {
+    // 家に近すぎる敵をチェックして削除
+    const houseRadius = 25 // 家の周囲25ピクセル以内
+    
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const enemy = this.enemies[i]
+      const distance = Phaser.Math.Distance.Between(
+        enemy.x, enemy.y, 
+        this.playerHouseX, this.playerHouseY
+      )
+      
+      if (distance <= houseRadius) {
+        // 敵が家に到達したとみなす
+        this.scene.events.emit('player-damaged', 10) // 10ポイント減点
+        
+        // 敵を削除
+        this.enemies.splice(i, 1)
+        enemy.destroy()
+      }
+    }
+  }
+
   private onEnemyReachedHouse(enemy: Enemy) {
     // 敵が家に到達した時の処理
     this.scene.events.emit('player-damaged', 10) // 10ポイント減点
@@ -176,6 +206,16 @@ export class EnemyManager {
 
   public getEnemyCount(): number {
     return this.enemies.length
+  }
+
+  public getEnemyAtPosition(x: number, y: number): Enemy | null {
+    // 指定した座標にある敵を探す
+    for (const enemy of this.enemies) {
+      if (enemy.checkCollision(x, y, 60)) { // 60ピクセルの当たり判定 - 指が隠れる範囲
+        return enemy
+      }
+    }
+    return null
   }
 
   public clearAllEnemies(): number {

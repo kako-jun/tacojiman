@@ -5,6 +5,7 @@ import { DEFAULT_GAME_CONFIG } from '@/utils/config'
 import { TitleScene } from './scenes/TitleScene'
 import { GameScene } from './scenes/GameScene'
 import { EndingScene } from './scenes/EndingScene'
+import { UIScene } from './scenes/UIScene'
 
 class Game extends Phaser.Game {
   constructor() {
@@ -29,7 +30,8 @@ class Game extends Phaser.Game {
       scene: [
         TitleScene,
         GameScene,
-        EndingScene
+        EndingScene,
+        UIScene
       ],
       input: {
         touch: true

@@ -8,7 +8,7 @@ export class Enemy extends Phaser.GameObjects.Container {
   public speed: number
   public scoreValue: number
   
-  private sprite: Phaser.GameObjects.Rectangle
+  private sprite: Phaser.GameObjects.Shape
   private healthBar: Phaser.GameObjects.Rectangle | null = null
   private targetX: number
   private targetY: number
@@ -38,6 +38,9 @@ export class Enemy extends Phaser.GameObjects.Container {
     // シーンに追加
     scene.add.existing(this)
     
+    // 敵はUIより低いdepthに設定
+    this.setDepth(100)
+    
     // 移動開始
     this.startMovement()
   }
@@ -48,37 +51,50 @@ export class Enemy extends Phaser.GameObjects.Container {
       Phaser.Display.Color.HexStringToColor(enemyData.color.hp2).color :
       Phaser.Display.Color.HexStringToColor(enemyData.color.hp1).color
 
-    this.sprite = this.scene.add.rectangle(0, 0, size, size, color)
+    // 敵タイプに応じた形状作成
+    switch (this.enemyType) {
+      case 'ground':
+        // 地上：矩形（Rectangle）
+        this.sprite = this.scene.add.rectangle(0, 0, size, size, color)
+        break
+      case 'water':
+        // 海上：円形（Circle）
+        this.sprite = this.scene.add.circle(0, 0, size / 2, color)
+        break
+      case 'air':
+        // 空：三角形（Triangle）
+        this.sprite = this.scene.add.triangle(0, 0, 0, -size/2, -size/2, size/2, size/2, size/2, color)
+        break
+      case 'underground':
+        // 地下：菱形（Diamond）
+        const points = [
+          0, -size/2,    // 上
+          size/2, 0,     // 右
+          0, size/2,     // 下
+          -size/2, 0     // 左
+        ]
+        this.sprite = this.scene.add.polygon(0, 0, points, color)
+        break
+      default:
+        // デフォルト：矩形
+        this.sprite = this.scene.add.rectangle(0, 0, size, size, color)
+        break
+    }
+
     this.sprite.setStrokeStyle(2, 0xffffff)
     this.add(this.sprite)
 
-    // HP2の場合は少し大きく、角張った形状
-    if (this.currentHP === 2) {
-      this.sprite.setDisplaySize(24, 24)
-    } else {
-      this.sprite.setDisplaySize(20, 20)
-      // HP1の場合は少し丸みを帯びた感じに
+    // HP1の場合は線を細くする
+    if (this.currentHP === 1) {
       this.sprite.setStrokeStyle(1, 0xffffff)
-    }
-
-    // 敵タイプに応じた形状調整
-    switch (this.enemyType) {
-      case 'air':
-        // 空挺降下型：少し細長い
-        this.sprite.setDisplaySize(size, size * 0.8)
-        break
-      case 'underground':
-        // 地下掘削型：正方形
-        this.sprite.setDisplaySize(size * 0.9, size * 0.9)
-        break
-      case 'water':
-        // 海上遡上型：少し横長
-        this.sprite.setDisplaySize(size * 1.1, size * 0.9)
-        break
     }
   }
 
   private startMovement() {
+    if (!this.scene || !this.scene.tweens) {
+      return
+    }
+
     const distance = Phaser.Math.Distance.Between(this.x, this.y, this.targetX, this.targetY)
     const duration = (distance / this.speed) * 100 // speedに応じて調整
 
@@ -126,6 +142,10 @@ export class Enemy extends Phaser.GameObjects.Container {
   }
 
   private showDamageEffect() {
+    if (!this.scene || !this.scene.tweens) {
+      return
+    }
+
     // 点滅エフェクト
     this.scene.tweens.add({
       targets: this.sprite,
@@ -136,7 +156,7 @@ export class Enemy extends Phaser.GameObjects.Container {
     })
 
     // ヒットストップ風の一瞬停止
-    if (this.moveTween) {
+    if (this.moveTween && this.scene.time) {
       this.moveTween.pause()
       this.scene.time.delayedCall(50, () => {
         if (this.moveTween) {
@@ -148,19 +168,21 @@ export class Enemy extends Phaser.GameObjects.Container {
 
   private updateAppearance() {
     if (this.currentHP === 1) {
-      // HP1になったらピンク色に変更
+      // HP1になったらピンク色に変更（サイズは変更しない）
       this.sprite.setFillStyle(0xFF8888)
-      this.sprite.setDisplaySize(20, 20)
       this.sprite.setStrokeStyle(1, 0xffffff)
     }
   }
 
   private onReachTarget() {
     // プレイヤーの家に到達
-    this.scene.events.emit('enemy-reached-house', this)
+    if (this.scene && this.scene.events) {
+      this.scene.events.emit('enemy-reached-house', this)
+    }
   }
 
-  public checkCollision(x: number, y: number, radius: number = 15): boolean {
+  public checkCollision(x: number, y: number, radius: number = 60): boolean {
+    // 敵の当たり判定を大きくする（デフォルト60ピクセル - 指が隠れる範囲）
     const distance = Phaser.Math.Distance.Between(this.x, this.y, x, y)
     return distance <= radius
   }

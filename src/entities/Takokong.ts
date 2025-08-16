@@ -32,6 +32,9 @@ export class Takokong extends Phaser.GameObjects.Container {
     this.createHealthBar()
     this.scene.add.existing(this)
     
+    // ボスはUIより低いが通常敵より高いdepthに設定
+    this.setDepth(200)
+    
     // 登場演出
     this.playEntranceAnimation()
   }
@@ -306,6 +309,11 @@ export class Takokong extends Phaser.GameObjects.Container {
   }
 
   private onDefeated() {
+    // シーンが無効になっている場合は早期リターン
+    if (!this.scene || !this.scene.sys || !this.scene.sys.isActive()) {
+      return
+    }
+
     // 攻撃停止
     if (this.attackTimer) {
       this.attackTimer.remove()
@@ -322,6 +330,11 @@ export class Takokong extends Phaser.GameObjects.Container {
     // 爆発エフェクト
     for (let i = 0; i < 8; i++) {
       this.scene.time.delayedCall(i * 100, () => {
+        // シーンが有効かどうか再度チェック
+        if (!this.scene || !this.scene.add) {
+          return
+        }
+        
         const explosion = this.scene.add.circle(
           this.x + (Math.random() - 0.5) * 100,
           this.y + (Math.random() - 0.5) * 100,
@@ -330,27 +343,33 @@ export class Takokong extends Phaser.GameObjects.Container {
           0.8
         )
         
-        this.scene.tweens.add({
-          targets: explosion,
-          scaleX: 3,
-          scaleY: 3,
-          alpha: 0,
-          duration: 500,
-          onComplete: () => explosion.destroy()
-        })
+        if (this.scene && this.scene.tweens) {
+          this.scene.tweens.add({
+            targets: explosion,
+            scaleX: 3,
+            scaleY: 3,
+            alpha: 0,
+            duration: 500,
+            onComplete: () => explosion.destroy()
+          })
+        }
       })
     }
     
     // 1秒後に消去
     this.scene.time.delayedCall(1000, () => {
-      this.scene.events.emit('takokong-defeated')
+      if (this.scene && this.scene.events) {
+        this.scene.events.emit('takokong-defeated')
+      }
       this.destroy()
     })
   }
 
   private onReachTarget() {
     // 家に到達 = ゲームオーバー
-    this.scene.events.emit('game-over-takokong-reached')
+    if (this.scene && this.scene.events) {
+      this.scene.events.emit('game-over-takokong-reached')
+    }
   }
 
   public checkCollision(x: number, y: number, radius: number = 40): boolean {
