@@ -63,10 +63,10 @@ export class EnemyManager {
   }
 
   private spawnInitialGroundEnemies() {
-    // 開始直後に地上タコを3匹、家に近い位置に配置
+    // 開始直後に地上タコを3匹、通常の出現位置から配置
     for (let i = 0; i < 3; i++) {
       this.scene.time.delayedCall(i * 200, () => {
-        this.spawnSpecificEnemy('ground', true) // 近距離フラグ
+        this.spawnSpecificEnemy('ground', false) // 通常の出現位置を使用
       })
     }
   }
@@ -103,58 +103,7 @@ export class EnemyManager {
     }
   }
 
-  private getNearHouseSpawnPosition(enemyType: EnemyType): { x: number; y: number } {
-    const tileSize = 30
-    const centerTileX = Math.floor(this.mapPanels.length / 2)
-    const centerTileY = Math.floor(this.mapPanels[0].length / 2)
-    
-    // 家から3-6マス離れた位置を探す（画面内に見える範囲）
-    const searchRadius = 6
-    const minRadius = 3
-    
-    for (let attempts = 0; attempts < 50; attempts++) {
-      const angle = Math.random() * Math.PI * 2
-      const distance = minRadius + Math.random() * (searchRadius - minRadius)
-      
-      const tileX = Math.floor(centerTileX + Math.cos(angle) * distance)
-      const tileY = Math.floor(centerTileY + Math.sin(angle) * distance)
-      
-      // 境界チェック
-      if (tileX < 0 || tileX >= this.mapPanels.length ||
-          tileY < 0 || tileY >= this.mapPanels[0].length) {
-        continue
-      }
-      
-      const panel = this.mapPanels[tileX][tileY]
-      if (!panel) continue
-      
-      // 敵タイプに応じた移動可能パネルをチェック
-      let canSpawn = false
-      switch (enemyType) {
-        case 'ground':
-          canSpawn = panel.type === 'path' || panel.type === 'rail'
-          break
-        case 'water':
-          canSpawn = panel.type === 'water'
-          break
-        case 'underground':
-          canSpawn = panel.type === 'rice_field' || panel.type === 'path'
-          break
-        case 'air':
-          canSpawn = true
-          break
-      }
-      
-      if (canSpawn) {
-        const worldX = this.mapWidth / 2 + (tileX - centerTileX) * tileSize
-        const worldY = this.mapHeight / 2 + (tileY - centerTileY) * tileSize
-        return { x: worldX, y: worldY }
-      }
-    }
-    
-    // 見つからない場合は通常の出現位置
-    return this.getSpawnPosition(enemyType)
-  }
+  // getNearHouseSpawnPosition() 関数を削除 - 不要な特別扱いを排除
 
   private increaseSpawnRate() {
     if (!this.spawnTimer) return
@@ -256,71 +205,86 @@ export class EnemyManager {
   
   private findPathEdgePosition(): { x: number; y: number } {
     const tileSize = 30
-    const validPositions: { x: number; y: number; tileX: number; tileY: number }[] = []
+    const centerTileX = Math.floor(this.mapPanels.length / 2)
+    const centerTileY = Math.floor(this.mapPanels[0].length / 2)
     
-    // マップの端にある地上タコ移動可能パネル（path + rail）を探す
+    // 自宅にたどり着けるあぜ道パネルをすべて収集
+    const reachablePaths: { x: number; y: number; tileX: number; tileY: number; distanceFromEdge: number }[] = []
+    
     for (let x = 0; x < this.mapPanels.length; x++) {
       for (let y = 0; y < this.mapPanels[0].length; y++) {
         const panel = this.mapPanels[x][y]
         if (panel && (panel.type === 'path' || panel.type === 'rail')) {
-          // 端にあるかチェック
-          if (x === 0 || x === this.mapPanels.length - 1 || 
-              y === 0 || y === this.mapPanels[0].length - 1) {
-            const worldX = this.mapWidth / 2 + (x - Math.floor(this.mapPanels.length / 2)) * tileSize
-            const worldY = this.mapHeight / 2 + (y - Math.floor(this.mapPanels[0].length / 2)) * tileSize
-            validPositions.push({ x: worldX, y: worldY, tileX: x, tileY: y })
+          // 自宅まで到達可能かチェック
+          if (this.hasValidPath(x, y, centerTileX, centerTileY, 'ground')) {
+            // ステージ端からの距離を計算（4辺からの最小距離）
+            const distanceFromEdge = Math.min(
+              x,                                    // 左端からの距離
+              this.mapPanels.length - 1 - x,       // 右端からの距離
+              y,                                    // 上端からの距離
+              this.mapPanels[0].length - 1 - y      // 下端からの距離
+            )
+            
+            const worldX = this.mapWidth / 2 + (x - centerTileX) * tileSize
+            const worldY = this.mapHeight / 2 + (y - centerTileY) * tileSize
+            
+            reachablePaths.push({ x: worldX, y: worldY, tileX: x, tileY: y, distanceFromEdge })
           }
         }
       }
     }
     
-    // 各候補位置から家までのパスが存在するかチェック
-    const centerTileX = Math.floor(this.mapPanels.length / 2)
-    const centerTileY = Math.floor(this.mapPanels[0].length / 2)
-    
-    for (const pos of validPositions) {
-      if (this.hasValidPath(pos.tileX, pos.tileY, centerTileX, centerTileY, 'ground')) {
-        return { x: pos.x, y: pos.y }
-      }
+    if (reachablePaths.length === 0) {
+      console.error('自宅に到達可能なあぜ道が見つからない')
+      throw new Error('地上タコの出現位置が確保できません')
     }
     
-    // パスが見つからない場合はエラー
-    console.error('地上タコの有効な出現位置が見つからない - マップ生成に問題がある')
-    throw new Error('地上タコの出現位置が確保できません')
+    // 最もステージ端に近い位置を選択（distanceFromEdgeが最小）
+    reachablePaths.sort((a, b) => a.distanceFromEdge - b.distanceFromEdge)
+    const edgePosition = reachablePaths[0]
+    
+    console.log(`地上タコ出現位置: タイル(${edgePosition.tileX}, ${edgePosition.tileY})、端からの距離: ${edgePosition.distanceFromEdge}`)
+    return { x: edgePosition.x, y: edgePosition.y }
   }
   
   private findWaterEdgePosition(): { x: number; y: number } {
     const tileSize = 30
-    const validPositions: { x: number; y: number; tileX: number; tileY: number }[] = []
     const centerTileX = Math.floor(this.mapPanels.length / 2)
     const centerTileY = Math.floor(this.mapPanels[0].length / 2)
     
-    // 自宅から最低1マス離れた水パネルから選択（難易度調整）
+    // 自宅にたどり着ける水路パネルをすべて収集
+    const reachableWater: { x: number; y: number; tileX: number; tileY: number }[] = []
+    
     for (let x = 0; x < this.mapPanels.length; x++) {
       for (let y = 0; y < this.mapPanels[0].length; y++) {
         const panel = this.mapPanels[x][y]
         if (panel && panel.type === 'water') {
-          // 自宅から1マス以上離れているかチェック
+          // 自宅から1マス以上離れているかチェック（難易度調整）
           const distanceFromHome = Math.max(Math.abs(x - centerTileX), Math.abs(y - centerTileY))
           if (distanceFromHome >= 1) {
-            const worldX = this.mapWidth / 2 + (x - Math.floor(this.mapPanels.length / 2)) * tileSize
-            const worldY = this.mapHeight / 2 + (y - Math.floor(this.mapPanels[0].length / 2)) * tileSize
-            validPositions.push({ x: worldX, y: worldY, tileX: x, tileY: y })
+            // 自宅まで到達可能かチェック
+            if (this.hasValidPath(x, y, centerTileX, centerTileY, 'water')) {
+              const worldX = this.mapWidth / 2 + (x - centerTileX) * tileSize
+              const worldY = this.mapHeight / 2 + (y - centerTileY) * tileSize
+              
+              reachableWater.push({ x: worldX, y: worldY, tileX: x, tileY: y })
+            }
           }
         }
       }
     }
     
-    // 各候補位置から家までのパスが存在するかチェック
-    for (const pos of validPositions) {
-      if (this.hasValidPath(pos.tileX, pos.tileY, centerTileX, centerTileY, 'water')) {
-        return { x: pos.x, y: pos.y }
-      }
+    if (reachableWater.length === 0) {
+      console.error('自宅に到達可能な水路が見つからない')
+      throw new Error('水タコの出現位置が確保できません')
     }
     
-    // パスが見つからない場合はエラー
-    console.error('水タコの有効な出現位置が見つからない - マップ生成に問題がある')
-    throw new Error('水タコの出現位置が確保できません')
+    // ランダムに選択（どこでも出現可能）
+    const randomIndex = Math.floor(Math.random() * reachableWater.length)
+    const spawnPosition = reachableWater[randomIndex]
+    
+    console.log(`水タコ出現位置: タイル(${spawnPosition.tileX}, ${spawnPosition.tileY})、候補数: ${reachableWater.length}`)
+    return { x: spawnPosition.x, y: spawnPosition.y }
   }
   
   private findUndergroundSpawnPosition(): { x: number; y: number } {
@@ -658,11 +622,11 @@ export class EnemyManager {
     // 敵タイプに応じた移動制限
     switch (enemyType) {
       case 'ground':
-        return panel.type === 'path' || panel.type === 'rail'
+        return panel.type === 'path' || panel.type === 'rail' || panel.type === 'player_house'
       case 'water':
-        return panel.type === 'water'
+        return panel.type === 'water' || panel.type === 'player_house'
       case 'underground':
-        return panel.type === 'rice_field' || panel.type === 'path'
+        return panel.type === 'rice_field' || panel.type === 'path' || panel.type === 'player_house'
       case 'air':
         return true // 制限なし
       default:

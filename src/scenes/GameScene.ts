@@ -36,6 +36,7 @@ export class GameScene extends Phaser.Scene {
   // ゲーム状態
   private gameStartMorningTime: string = ''
   private takokongSpawned: boolean = false
+  private isPaused: boolean = false
   
   // スクリーンショット管理
   private screenshots: string[] = []
@@ -45,6 +46,9 @@ export class GameScene extends Phaser.Scene {
   private mapPanels: MapPanel[][] = []
   private otherHousePositions: { x: number; y: number }[] = []
   private stationPositions: { x: number; y: number }[] = []
+  
+  // 一時停止用
+  private pauseText: Phaser.GameObjects.Text | null = null
 
   constructor() {
     super({ key: 'GameScene' })
@@ -149,9 +153,8 @@ export class GameScene extends Phaser.Scene {
         if (!panel) continue
         
         // 自宅パネル（中央）が画面中央に来るよう位置調整
-        // パネルの中心が画面中央に来るよう、微調整
-        const tileX = (x - centerTileX) * tileSize - tileSize / 2 + 1
-        const tileY = (y - centerTileY) * tileSize - tileSize / 2
+        const tileX = (x - centerTileX) * tileSize
+        const tileY = (y - centerTileY) * tileSize
         
         // パネルタイプに応じた色を取得
         const config = PANEL_CONFIG[panel.type]
@@ -242,7 +245,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setupInput() {
+    // スペースキーでゲーム一時停止
+    this.input.keyboard?.on('keydown-SPACE', () => {
+      this.togglePause()
+    })
+
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (this.isPaused) return // 一時停止中は無視
       // ズームアウト中でもタップを許可（ズームインを再開）
       
       this.isLongPress = false
@@ -266,6 +275,8 @@ export class GameScene extends Phaser.Scene {
     })
     
     const handlePointerUp = (pointer: Phaser.Input.Pointer) => {
+      if (this.isPaused) return // 一時停止中は無視
+      
       if (this.longPressTimer) {
         this.longPressTimer.remove()
         this.longPressTimer = null
@@ -1088,7 +1099,47 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
+  private togglePause() {
+    this.isPaused = !this.isPaused
+    
+    if (this.isPaused) {
+      // ゲーム一時停止
+      this.scene.pause()
+      this.physics.pause()
+      this.enemyManager.pauseAllEnemies()
+      
+      // 一時停止メッセージを表示
+      const { width, height } = this.scale
+      this.pauseText = this.add.text(width / 2, height / 2, 'PAUSED\nPress SPACE to resume', {
+        fontSize: '48px',
+        color: '#ffffff',
+        fontFamily: 'monospace',
+        stroke: '#000000',
+        strokeThickness: 4,
+        align: 'center'
+      }).setOrigin(0.5).setDepth(1000)
+      
+      console.log('===== ゲーム一時停止 =====')
+    } else {
+      // ゲーム再開
+      this.scene.resume()
+      this.physics.resume()
+      this.enemyManager.resumeAllEnemies()
+      
+      // 一時停止メッセージを削除
+      if (this.pauseText) {
+        this.pauseText.destroy()
+        this.pauseText = null
+      }
+      
+      console.log('===== ゲーム再開 =====')
+    }
+  }
+
   update() {
+    // 一時停止中は更新しない
+    if (this.isPaused) return
+    
     // ゲームループ処理
   }
 }

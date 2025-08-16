@@ -82,8 +82,11 @@ export class Enemy extends Phaser.GameObjects.Container {
     // 敵タイプに応じた形状作成
     switch (this.enemyType) {
       case 'ground':
-        // 地上：矩形（Rectangle）
-        this.sprite = this.scene.add.rectangle(0, 0, size, size, color)
+        // 地上：矩形（Rectangle）- デバッグ用に大きく明るい色に
+        const debugSize = 40 // 通常の2倍
+        const debugColor = 0x00ff00 // 明るい緑色
+        this.sprite = this.scene.add.rectangle(0, 0, debugSize, debugSize, debugColor)
+        console.log(`地上タコ描画（デバッグ）: サイズ=${debugSize}, 色=${debugColor.toString(16)}, 位置=(${this.x}, ${this.y})`)
         break
       case 'water':
         // 海上：円形（Circle）
@@ -115,6 +118,12 @@ export class Enemy extends Phaser.GameObjects.Container {
     // HP1の場合は線を細くする
     if (this.currentHP === 1) {
       this.sprite.setStrokeStyle(1, 0xffffff)
+    }
+
+    // 地上タコの可視性デバッグ
+    if (this.enemyType === 'ground') {
+      console.log(`地上タコ最終確認: visible=${this.visible}, depth=${this.depth}, alpha=${this.alpha}, scale=${this.scale}`)
+      console.log(`地上タコsprite: visible=${this.sprite.visible}, alpha=${this.sprite.alpha}`)
     }
   }
 
@@ -198,11 +207,27 @@ export class Enemy extends Phaser.GameObjects.Container {
     const centerTileX = Math.floor(this.mapPanels.length / 2)
     const centerTileY = Math.floor(this.mapPanels[0].length / 2)
 
-    // 現在位置をタイル座標に変換（GameSceneの座標系に合わせる）
-    const startTileX = Math.floor(this.x / tileSize) + centerTileX
-    const startTileY = Math.floor(this.y / tileSize) + centerTileY
-    const endTileX = Math.floor(this.targetX / tileSize) + centerTileX
-    const endTileY = Math.floor(this.targetY / tileSize) + centerTileY
+    // 現在位置をタイル座標に変換（ワールド座標→タイル座標）
+    const startTileX = Math.floor((this.x - this.scene.scale.width / 2) / tileSize) + centerTileX
+    const startTileY = Math.floor((this.y - this.scene.scale.height / 2) / tileSize) + centerTileY
+    const endTileX = Math.floor((this.targetX - this.scene.scale.width / 2) / tileSize) + centerTileX  
+    const endTileY = Math.floor((this.targetY - this.scene.scale.height / 2) / tileSize) + centerTileY
+
+    console.log(`${this.enemyType}タコ座標変換: ワールド(${this.x.toFixed(1)}, ${this.y.toFixed(1)}) → タイル(${startTileX}, ${startTileY})`)
+    console.log(`目標座標変換: ワールド(${this.targetX.toFixed(1)}, ${this.targetY.toFixed(1)}) → タイル(${endTileX}, ${endTileY})`)
+
+    // 境界チェック
+    if (startTileX < 0 || startTileX >= this.mapPanels.length || 
+        startTileY < 0 || startTileY >= this.mapPanels[0].length) {
+      console.error(`${this.enemyType}タコ: 開始位置がマップ外 タイル(${startTileX}, ${startTileY})`)
+      return []
+    }
+    
+    if (endTileX < 0 || endTileX >= this.mapPanels.length || 
+        endTileY < 0 || endTileY >= this.mapPanels[0].length) {
+      console.error(`${this.enemyType}タコ: 目標位置がマップ外 タイル(${endTileX}, ${endTileY})`)
+      return []
+    }
 
     // A*風のパスファインディング
     const openSet: Array<{x: number, y: number, g: number, h: number, f: number, parent: any}> = []
@@ -317,17 +342,17 @@ export class Enemy extends Phaser.GameObjects.Container {
     const panel = this.mapPanels[tileX][tileY]
     if (!panel) return false
 
-    // 敵タイプに応じた移動制限
+    // 敵タイプに応じた移動制限（自宅到達を可能にする）
     let canMove = false
     switch (this.enemyType) {
       case 'ground':
-        canMove = panel.type === 'path' || panel.type === 'rail' // あぜ道と線路のみ
+        canMove = panel.type === 'path' || panel.type === 'rail' || panel.type === 'player_house'
         break
       case 'water':
-        canMove = panel.type === 'water' // 水パネルのみ
+        canMove = panel.type === 'water' || panel.type === 'player_house'
         break
       case 'underground':
-        canMove = panel.type === 'rice_field' || panel.type === 'path' // 田んぼとあぜ道のみ
+        canMove = panel.type === 'rice_field' || panel.type === 'path' || panel.type === 'player_house'
         break
       case 'air':
         canMove = true // 制限なし
