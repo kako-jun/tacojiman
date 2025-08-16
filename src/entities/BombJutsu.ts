@@ -299,19 +299,13 @@ export class BombJutsu {
   private activateSOL(scene: Phaser.Scene, homeX: number, homeY: number) {
     const { width, height } = scene.scale
     
-    // 宇宙からの攻撃演出開始
-    scene.cameras.main.fadeOut(500, 0, 0, 0)
-    
-    // 警告音（画面暗転中）
-    scene.time.delayedCall(500, () => {
-      // 宇宙からのターゲティング
-      this.showSOLTargeting(scene, homeX, homeY, width, height)
-    })
+    // 宇宙からの攻撃演出開始（画面暗転なし）
+    // 直接ターゲティング開始
+    this.showSOLTargeting(scene, homeX, homeY, width, height)
   }
 
   private showSOLTargeting(scene: Phaser.Scene, homeX: number, homeY: number, width: number, height: number) {
-    // 画面をゆっくりと明るく
-    scene.cameras.main.fadeIn(1000)
+    // 画面フェードイン削除
     
     // ランダムなターゲット位置（家の周辺）
     const targetX = homeX + (Math.random() - 0.5) * 200

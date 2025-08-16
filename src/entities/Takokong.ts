@@ -110,28 +110,21 @@ export class Takokong extends Phaser.GameObjects.Container {
   }
 
   private playEntranceAnimation() {
-    // 画面暗転
-    this.scene.cameras.main.fadeOut(200, 0, 0, 0)
+    // 画面暗転削除
     
-    this.scene.time.delayedCall(200, () => {
-      // 画面フラッシュ
-      // 登場演出（フラッシュなし）
-      this.scene.cameras.main.fadeIn(300)
-      
-      // 登場移動
-      this.moveTween = this.scene.tweens.add({
-        targets: this,
-        y: this.targetY - 50, // 家より少し上に位置
-        duration: 2000,
-        ease: 'Power2',
-        onComplete: () => {
-          this.startBossBehavior()
-        }
-      })
-      
-      // 登場時のカメラシェイク
-      this.scene.cameras.main.shake(1000, 10)
+    // 登場移動（即座に開始）
+    this.moveTween = this.scene.tweens.add({
+      targets: this,
+      y: this.targetY - 50, // 家より少し上に位置
+      duration: 2000,
+      ease: 'Power2',
+      onComplete: () => {
+        this.startBossBehavior()
+      }
     })
+    
+    // 登場時のカメラシェイク
+    this.scene.cameras.main.shake(1000, 10)
   }
 
   private startBossBehavior() {

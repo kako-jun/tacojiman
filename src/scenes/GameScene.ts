@@ -124,7 +124,7 @@ export class GameScene extends Phaser.Scene {
     graphics.fillRect(-mapSize / 2, -mapSize / 2, mapSize, mapSize)
     
     // マップ生成
-    const tileSize = 60
+    const tileSize = 30 // パネルサイズを半分に縮小
     const mapGenerator = new MapGenerator(mapSize, mapSize, tileSize)
     this.mapPanels = mapGenerator.generateMap()
     
@@ -148,7 +148,7 @@ export class GameScene extends Phaser.Scene {
         
         // パネル描画
         graphics.fillStyle(color, alpha)
-        graphics.fillRect(tileX, tileY, tileSize - 2, tileSize - 2)
+        graphics.fillRect(tileX, tileY, tileSize - 1, tileSize - 1)
         
         // 枠線
         if (panel.type === 'player_house') {
@@ -171,7 +171,7 @@ export class GameScene extends Phaser.Scene {
         } else {
           graphics.lineStyle(1, 0xffffff, 0.3)
         }
-        graphics.strokeRect(tileX, tileY, tileSize - 2, tileSize - 2)
+        graphics.strokeRect(tileX, tileY, tileSize - 1, tileSize - 1)
         
         // 接続の描画（あぜ道と線路のみ）
         if (panel.type === 'path' || panel.type === 'rail') {
@@ -485,9 +485,9 @@ export class GameScene extends Phaser.Scene {
   }
   
   private isInOtherHouse(x: number, y: number): boolean {
-    // 他人の家パネル（60x60）の範囲内かチェック
+    // 他人の家パネル（30x30）の範囲内かチェック
     for (const house of this.otherHousePositions) {
-      if (Math.abs(x - house.x) < 30 && Math.abs(y - house.y) < 30) {
+      if (Math.abs(x - house.x) < 15 && Math.abs(y - house.y) < 15) {
         return true
       }
     }
@@ -495,9 +495,9 @@ export class GameScene extends Phaser.Scene {
   }
   
   private isInStation(x: number, y: number): boolean {
-    // 駅パネル（60x60）の範囲内かチェック
+    // 駅パネル（30x30）の範囲内かチェック
     for (const station of this.stationPositions) {
-      if (Math.abs(x - station.x) < 30 && Math.abs(y - station.y) < 30) {
+      if (Math.abs(x - station.x) < 15 && Math.abs(y - station.y) < 15) {
         return true
       }
     }

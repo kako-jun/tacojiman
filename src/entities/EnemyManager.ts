@@ -95,7 +95,7 @@ export class EnemyManager {
   }
 
   private getSpawnPosition(enemyType: EnemyType): { x: number; y: number } {
-    const tileSize = 60 // マップタイル1マスのサイズ
+    const tileSize = 30 // マップタイル1マスのサイズ
     const centerTileX = Math.floor(this.mapPanels.length / 2)
     const centerTileY = Math.floor(this.mapPanels[0].length / 2)
     
@@ -109,17 +109,12 @@ export class EnemyManager {
         return this.findWaterEdgePosition()
       
       case 'air':
-        // 空タコ：空から（上端のさらに上）
-        return { x: Math.random() * this.mapWidth, y: -60 }
+        // 空タコ：空から（画面端から）
+        return this.findAirSpawnPosition()
       
       case 'underground':
-        // 地下タコ：家の近くに突然出現
-        const angle = Math.random() * Math.PI * 2
-        const distance = 80 + Math.random() * 100
-        return {
-          x: this.playerHouseX + Math.cos(angle) * distance,
-          y: this.playerHouseY + Math.sin(angle) * distance
-        }
+        // 地下タコ：田んぼやあぜ道に突然出現
+        return this.findUndergroundSpawnPosition()
       
       default:
         return { x: 0, y: 0 }
@@ -127,7 +122,7 @@ export class EnemyManager {
   }
   
   private findPathEdgePosition(): { x: number; y: number } {
-    const tileSize = 60
+    const tileSize = 30
     const pathPositions: { x: number; y: number }[] = []
     
     // マップの端にあるあぜ道を探す
@@ -156,7 +151,7 @@ export class EnemyManager {
   }
   
   private findWaterEdgePosition(): { x: number; y: number } {
-    const tileSize = 60
+    const tileSize = 30
     const waterPositions: { x: number; y: number }[] = []
     
     // マップの端にある水パネルを探す
@@ -182,6 +177,73 @@ export class EnemyManager {
     
     // 水パネルの端が見つからない場合は上端から
     return { x: Math.random() * this.mapWidth, y: -30 }
+  }
+  
+  private findUndergroundSpawnPosition(): { x: number; y: number } {
+    const tileSize = 30
+    const undergroundPositions: { x: number; y: number }[] = []
+    const maxDistance = 90 // 家から3マス以内（90ピクセル）
+    
+    // 家の近くの田んぼとあぜ道パネルを探す
+    for (let x = 0; x < this.mapPanels.length; x++) {
+      for (let y = 0; y < this.mapPanels[0].length; y++) {
+        const panel = this.mapPanels[x][y]
+        if (panel && (panel.type === 'rice_field' || panel.type === 'path')) {
+          const worldX = this.mapWidth / 2 + (x - Math.floor(this.mapPanels.length / 2)) * tileSize
+          const worldY = this.mapHeight / 2 + (y - Math.floor(this.mapPanels[0].length / 2)) * tileSize
+          
+          // 家からの距離をチェック
+          const distance = Math.sqrt((worldX - this.playerHouseX) ** 2 + (worldY - this.playerHouseY) ** 2)
+          if (distance <= maxDistance) {
+            undergroundPositions.push({ x: worldX, y: worldY })
+          }
+        }
+      }
+    }
+    
+    // 家の近くの田んぼ/あぜ道からランダム選択
+    if (undergroundPositions.length > 0) {
+      return undergroundPositions[Math.floor(Math.random() * undergroundPositions.length)]
+    }
+    
+    // 近くに田んぼ/あぜ道が見つからない場合は家の近くから（従来通り）
+    const angle = Math.random() * Math.PI * 2
+    const distance = 80 + Math.random() * 100
+    return {
+      x: this.playerHouseX + Math.cos(angle) * distance,
+      y: this.playerHouseY + Math.sin(angle) * distance
+    }
+  }
+  
+  private findAirSpawnPosition(): { x: number; y: number } {
+    // 空タコは画面の4方向どこからでも出現可能
+    const edge = Math.floor(Math.random() * 4) // 0:上, 1:右, 2:下, 3:左
+    const margin = 30
+    
+    switch (edge) {
+      case 0: // 上から
+        return { 
+          x: Math.random() * this.mapWidth, 
+          y: -margin 
+        }
+      case 1: // 右から
+        return { 
+          x: this.mapWidth + margin, 
+          y: Math.random() * this.mapHeight 
+        }
+      case 2: // 下から
+        return { 
+          x: Math.random() * this.mapWidth, 
+          y: this.mapHeight + margin 
+        }
+      case 3: // 左から
+        return { 
+          x: -margin, 
+          y: Math.random() * this.mapHeight 
+        }
+      default:
+        return { x: Math.random() * this.mapWidth, y: -margin }
+    }
   }
 
   public checkAttackHit(x: number, y: number, radius: number = 15, filter?: (enemy: Enemy) => boolean): { hit: boolean; score: number; enemy?: Enemy } {
