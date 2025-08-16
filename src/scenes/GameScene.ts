@@ -8,11 +8,12 @@ import { BombType } from '@/types'
 
 export class GameScene extends Phaser.Scene {
   private gameTimer!: Phaser.Time.TimerEvent
+  private clockTimer!: Phaser.Time.TimerEvent
   private gameTimeRemaining: number = 180
   private currentScore: number = 0
+  private gameStartTime: number = 0
   
   // UI要素
-  private timeDisplay!: Phaser.GameObjects.Text
   private scoreDisplay!: Phaser.GameObjects.Text
   private clockDisplay!: Phaser.GameObjects.Text
   private bombStockDisplay!: Phaser.GameObjects.Text
@@ -55,40 +56,45 @@ export class GameScene extends Phaser.Scene {
     this.cameraController = new CameraController(this, width / 2, height / 2)
     this.enemyManager = new EnemyManager(this, width / 2, height / 2, width, height)
     
+    this.generateRandomBombType() // 最初にボムタイプを生成
     this.createUI(width, height)
     this.setupInput()
     this.setupEventListeners()
+    this.gameStartTime = this.time.now // ゲーム開始時刻を記録
+    this.updateMorningTime() // 初期表示で時刻を更新
+    this.updateBombDisplay() // 初期表示でボム名を更新
     this.startGameTimer()
+    this.startClockTimer() // 時刻用の高頻度タイマー開始
     this.enemyManager.startSpawning()
-    this.generateRandomBombType()
   }
 
   private generateMorningTime() {
-    const startHour = Math.floor(Math.random() * 4) + 4
-    const startMinute = Math.floor(Math.random() * 60)
-    this.gameStartMorningTime = `${startHour}:${startMinute.toString().padStart(2, '0')} AM`
+    const startHour = Math.floor(Math.random() * 5) + 4 // 4時から8時まで
+    this.gameStartMorningTime = `${startHour}:00:00 AM`
   }
 
   private updateMorningTime() {
-    // ゲーム内時間の進行（3分で30分経過 = 10倍速）
-    const elapsedGameMinutes = (180 - this.gameTimeRemaining) * 10
-    
     // 開始時刻から計算
-    const startTimeMatch = this.gameStartMorningTime.match(/(\d+):(\d+) AM/)
+    const startTimeMatch = this.gameStartMorningTime.match(/(\d+):(\d+):(\d+) AM/)
     if (!startTimeMatch) return
     
     const startHour = parseInt(startTimeMatch[1])
-    const startMinute = parseInt(startTimeMatch[2])
     
-    // 総分数で計算
-    const totalStartMinutes = startHour * 60 + startMinute
-    const currentTotalMinutes = totalStartMinutes + elapsedGameMinutes
+    // 現在時刻からの経過ミリ秒
+    const elapsedMs = this.time.now - this.gameStartTime
     
-    // 時間と分に変換
-    const currentHour = Math.floor(currentTotalMinutes / 60) % 12 || 12
-    const currentMinute = Math.floor(currentTotalMinutes % 60)
+    // ゲーム内経過時間（30分を3分で進行）
+    const elapsedGameMinutes = (elapsedMs / 180000) * 30 // 180000ms = 3分
     
-    this.clockDisplay.setText(`${currentHour}:${currentMinute.toString().padStart(2, '0')} AM`)
+    // 現在の時刻計算
+    const currentHour = startHour
+    const currentMinute = Math.floor(elapsedGameMinutes)
+    
+    // 秒は10倍速で進行（100msごとに1秒進む）
+    const totalTenthSeconds = Math.floor(elapsedMs / 100) // 100msごとのカウント
+    const currentSecond = totalTenthSeconds % 60
+    
+    this.clockDisplay.setText(`${currentHour}:${currentMinute.toString().padStart(2, '0')}:${currentSecond.toString().padStart(2, '0')} AM`)
   }
 
   private createWireframeMap(width: number, height: number) {
@@ -228,32 +234,25 @@ export class GameScene extends Phaser.Scene {
 
   private createUI(width: number, height: number) {
     this.clockDisplay = this.add.text(20, 20, this.gameStartMorningTime, {
-      fontSize: '24px',
+      fontSize: '20px',
       color: '#ffffff',
       fontFamily: 'monospace',
       stroke: '#000000',
       strokeThickness: 2
     }).setScrollFactor(0) // ズームの影響を受けない
     
-    this.timeDisplay = this.add.text(width - 20, 20, `${this.gameTimeRemaining}s`, {
+    this.scoreDisplay = this.add.text(width - 20, 20, `${this.currentScore} oct`, {
       fontSize: '20px',
-      color: '#ffff00',
+      color: '#ffffff',
       fontFamily: 'monospace',
       stroke: '#000000',
       strokeThickness: 2
     }).setOrigin(1, 0).setScrollFactor(0) // ズームの影響を受けない
     
-    this.scoreDisplay = this.add.text(20, height - 80, `Score: ${this.currentScore}`, {
-      fontSize: '18px',
-      color: '#ffffff',
-      fontFamily: 'monospace',
-      stroke: '#000000',
-      strokeThickness: 2
-    }).setScrollFactor(0) // ズームの影響を受けない
 
-    this.bombStockDisplay = this.add.text(20, height - 50, `Bomb: ${this.bombStock}`, {
-      fontSize: '16px',
-      color: '#ff8800',
+    this.bombStockDisplay = this.add.text(20, height - 50, '', {
+      fontSize: '20px',
+      color: '#ffffff',
       fontFamily: 'monospace',
       stroke: '#000000',
       strokeThickness: 2
@@ -271,7 +270,7 @@ export class GameScene extends Phaser.Scene {
       
       // タップ開始と同時にズーム開始
       const worldPoint = this.cameraController.getWorldPoint(pointer.x, pointer.y)
-      this.cameraController.startZoomIn(worldPoint.x, worldPoint.y, 2.5)
+      this.cameraController.startZoomIn(worldPoint.x, worldPoint.y, 3.0)
       
       this.longPressTimer = this.time.delayedCall(300, () => {
         this.isLongPress = true
@@ -296,10 +295,8 @@ export class GameScene extends Phaser.Scene {
     })
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (this.isLongPress && this.cameraController.getIsZoomedIn()) {
-        const worldPoint = this.cameraController.getWorldPoint(pointer.x, pointer.y)
-        this.cameraController.updateZoomTarget(worldPoint.x, worldPoint.y)
-      }
+      // ズーム中のドラッグは完全に無視
+      // 最初にタップした位置のみが重要
     })
   }
 
@@ -542,14 +539,15 @@ export class GameScene extends Phaser.Scene {
   private activateBombJutsu() {
     if (this.bombStock <= 0 || !this.currentBombType) return
 
-    this.bombStock--
-    this.updateBombDisplay()
-
     const bombData = BOMB_DATA.find(data => data.type === this.currentBombType)
     if (bombData) {
       const bomb = new BombJutsu(this.currentBombType, bombData)
       bomb.activate(this, this.playerHouse.x, this.playerHouse.y)
     }
+
+    this.bombStock--
+    this.currentBombType = null // ボムを使用したらタイプもクリア
+    this.updateBombDisplay()
   }
 
   private generateRandomBombType() {
@@ -710,13 +708,9 @@ export class GameScene extends Phaser.Scene {
       delay: 1000,
       callback: () => {
         this.gameTimeRemaining--
-        this.timeDisplay.setText(`${this.gameTimeRemaining}s`)
-        
-        // 朝の時刻を更新（ゲーム内時間進行）
-        this.updateMorningTime()
         
         // ボム自動回復（1分、2分時点）
-        if ((this.gameTimeRemaining === 120 || this.gameTimeRemaining === 60) && this.bombStock === 0) {
+        if ((this.gameTimeRemaining === 120 || this.gameTimeRemaining === 60)) {
           this.bombStock = 1
           this.generateRandomBombType()
           this.updateBombDisplay()
@@ -730,6 +724,16 @@ export class GameScene extends Phaser.Scene {
         if (this.gameTimeRemaining <= 0) {
           this.endGame()
         }
+      },
+      loop: true
+    })
+  }
+
+  private startClockTimer() {
+    this.clockTimer = this.time.addEvent({
+      delay: 100, // 1/10秒ごとに更新
+      callback: () => {
+        this.updateMorningTime()
       },
       loop: true
     })
@@ -753,18 +757,22 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateScoreDisplay() {
-    this.scoreDisplay.setText(`Score: ${this.currentScore}`)
+    this.scoreDisplay.setText(`${this.currentScore} oct`)
   }
 
   private updateBombDisplay() {
-    const bombName = this.currentBombType ? 
-      BOMB_DATA.find(data => data.type === this.currentBombType)?.name || 'Unknown' : 
-      'None'
-    this.bombStockDisplay.setText(`Bomb: ${this.bombStock} (${bombName})`)
+    if (this.bombStock > 0 && this.currentBombType) {
+      const bombData = BOMB_DATA.find(data => data.type === this.currentBombType)
+      const bombName = bombData?.name || 'Unknown'
+      this.bombStockDisplay.setText(bombName)
+    } else {
+      this.bombStockDisplay.setText('')
+    }
   }
 
   private endGame() {
     this.gameTimer.remove()
+    this.clockTimer.remove()
     this.enemyManager.destroy()
     this.cameraController.destroy()
     

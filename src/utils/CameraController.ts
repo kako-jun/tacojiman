@@ -23,7 +23,7 @@ export class CameraController {
     this.camera.centerOn(homeX, homeY)
   }
 
-  public startZoomIn(targetX: number, targetY: number, zoomLevel: number = 2) {
+  public startZoomIn(targetX: number, targetY: number, zoomLevel: number = 3) {
     if (this.isZooming) return
 
     this.isZooming = true
@@ -31,21 +31,22 @@ export class CameraController {
     this.zoomLevel = zoomLevel
     this.zoomTarget = { x: targetX, y: targetY }
 
-    // シンプルにタップ位置を中心にズーム
-    this.scene.tweens.add({
-      targets: this.camera,
-      zoom: zoomLevel,
-      duration: 400, // ズームは高速
-      ease: 'Linear'
-    })
-
-    // タップ位置を中心にパン
+    // 家中心から開始して、1秒後にタップ位置が中心になるズームイン
     this.zoomTween = this.scene.tweens.add({
       targets: this.camera,
-      scrollX: targetX - this.camera.width / 2,
-      scrollY: targetY - this.camera.height / 2,
-      duration: 800, // パンは低速
-      ease: 'Linear'
+      zoom: zoomLevel,
+      duration: 1000, // 1秒かけて3倍ズーム
+      ease: 'Linear',
+      onUpdate: () => {
+        // ズーム進行度（0→1）
+        const progress = (this.camera.zoom - 1) / (zoomLevel - 1)
+        
+        // 家の位置からタップ位置へ中心を補間
+        const currentCenterX = this.homeX + (targetX - this.homeX) * progress
+        const currentCenterY = this.homeY + (targetY - this.homeY) * progress
+        
+        this.camera.centerOn(currentCenterX, currentCenterY)
+      }
     })
   }
 
@@ -64,26 +65,29 @@ export class CameraController {
 
     this.isZoomingOut = true
     this.isZoomedIn = false
-    this.zoomTarget = null
+    
+    // ズームアウト開始時点の中心位置を記録
+    const startCenterX = this.camera.scrollX + this.camera.width / 2
+    const startCenterY = this.camera.scrollY + this.camera.height / 2
 
-    // ズームアニメーション（高速）
+    // ズームアウト（半分の速度 = 2秒）
     this.scene.tweens.add({
       targets: this.camera,
       zoom: 1,
-      duration: 200, // ズームアウトは高速
-      ease: 'Linear'
-    })
-
-    // 家の中心へパン（低速）
-    this.scene.tweens.add({
-      targets: this.camera,
-      scrollX: this.homeX - this.camera.width / 2,
-      scrollY: this.homeY - this.camera.height / 2,
-      duration: 400, // パンは低速
+      duration: 2000, // ズームインの半分の速度（2秒）
       ease: 'Linear',
+      onUpdate: () => {
+        // ズーム進行度（3倍→1倍への進行度）
+        const progress = (this.zoomLevel - this.camera.zoom) / (this.zoomLevel - 1)
+        
+        // 現在の中心位置から家の位置へ線形補間
+        const currentCenterX = startCenterX + (this.homeX - startCenterX) * progress
+        const currentCenterY = startCenterY + (this.homeY - startCenterY) * progress
+        
+        this.camera.centerOn(currentCenterX, currentCenterY)
+      },
       onComplete: () => {
-        // 最終的に確実に家の中心に
-        this.camera.centerOn(this.homeX, this.homeY)
+        this.zoomTarget = null
         this.isZoomingOut = false
       }
     })

@@ -177,6 +177,20 @@ export class Enemy extends Phaser.GameObjects.Container {
     }
   }
 
+  public setTarget(newTargetX: number, newTargetY: number) {
+    // 現在の移動を停止
+    if (this.moveTween) {
+      this.moveTween.remove()
+    }
+    
+    // 新しい標的を設定
+    this.targetX = newTargetX
+    this.targetY = newTargetY
+    
+    // 新しい標的に向かって移動開始
+    this.startMovement()
+  }
+
   destroy(fromScene?: boolean) {
     if (this.moveTween) {
       this.moveTween.remove()

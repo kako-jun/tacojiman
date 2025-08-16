@@ -11,6 +11,7 @@ export class EnemyManager {
   private spawnTimer: Phaser.Time.TimerEvent | null = null
   private mapWidth: number
   private mapHeight: number
+  private decoyTargets: Map<number, { x: number; y: number; range: number }> = new Map()
 
   constructor(scene: Phaser.Scene, houseX: number, houseY: number, mapWidth: number, mapHeight: number) {
     this.scene = scene
@@ -58,6 +59,11 @@ export class EnemyManager {
     )
 
     this.enemies.push(enemy)
+    
+    // 分身が存在する場合は新しい敵も誘導
+    if (this.decoyTargets.size > 0) {
+      this.updateSingleEnemyTarget(enemy)
+    }
   }
 
   private getRandomEnemyType(): EnemyType {
@@ -180,6 +186,55 @@ export class EnemyManager {
     })
     this.enemies = []
     return totalScore
+  }
+
+  public addDecoyTarget(x: number, y: number, range: number, decoyNumber: number) {
+    this.decoyTargets.set(decoyNumber, { x, y, range })
+    
+    // 既存の敵の標的を更新
+    this.updateEnemyTargets()
+  }
+
+  public removeDecoyTarget(decoyNumber: number) {
+    this.decoyTargets.delete(decoyNumber)
+    
+    // 敵の標的を更新
+    this.updateEnemyTargets()
+  }
+
+  public clearAllDecoyTargets() {
+    this.decoyTargets.clear()
+    
+    // すべての敵を元の標的（家）に戻す
+    this.enemies.forEach(enemy => {
+      enemy.setTarget(this.playerHouseX, this.playerHouseY)
+    })
+  }
+
+  private updateEnemyTargets() {
+    this.enemies.forEach(enemy => {
+      this.updateSingleEnemyTarget(enemy)
+    })
+  }
+
+  private updateSingleEnemyTarget(enemy: Enemy) {
+    // 最も近い分身を探す
+    let closestDecoy: { x: number; y: number; range: number } | null = null
+    let minDistance = Infinity
+    
+    this.decoyTargets.forEach(decoy => {
+      const distance = Phaser.Math.Distance.Between(enemy.x, enemy.y, decoy.x, decoy.y)
+      if (distance <= decoy.range && distance < minDistance) {
+        minDistance = distance
+        closestDecoy = decoy
+      }
+    })
+    
+    if (closestDecoy) {
+      enemy.setTarget(closestDecoy.x, closestDecoy.y)
+    } else {
+      enemy.setTarget(this.playerHouseX, this.playerHouseY)
+    }
   }
 
   public destroy() {
