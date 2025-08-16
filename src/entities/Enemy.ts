@@ -19,7 +19,7 @@ export class Enemy extends Phaser.GameObjects.Container {
   private lastPosition: { x: number; y: number } = { x: 0, y: 0 }
   private trailTimer: number = 0
   private readonly TRAIL_INTERVAL = 50 // 50msごとに残像を作成
-  private readonly MAX_TRAIL_LENGTH = 5 // 最大5個の残像
+  private readonly MAX_TRAIL_LENGTH = 8 // 最大8個の残像
   
   // マップパネル情報
   private mapPanels?: any[][]
@@ -123,13 +123,20 @@ export class Enemy extends Phaser.GameObjects.Container {
       return
     }
 
-    // パネル制限に応じた移動
-    if (this.enemyType === 'air') {
-      // 空タコは制限なし（直線移動）
+    // 敵タイプに応じた移動方式（完全排他）
+    if (this.enemyType === 'air' || this.enemyType === 'underground') {
+      // 空タコ：空中を直線移動
+      // 地下タコ：地中を直線移動（地下から突然出現して直進）
+      console.log(`${this.enemyType}タコ: 直線移動開始`)
       this.startDirectMovement()
-    } else {
-      // 地上、水、地下タコはパネルを辿って移動
+    } else if (this.enemyType === 'ground' || this.enemyType === 'water') {
+      // 地上タコ：道路・線路を辿って移動
+      // 水タコ：水路を辿って移動
+      console.log(`${this.enemyType}タコ: パスファインディング移動開始`)
       this.startPathfindingMovement()
+    } else {
+      console.error(`未定義の敵タイプ: ${this.enemyType}`)
+      this.startDirectMovement() // フォールバック
     }
   }
 
@@ -137,9 +144,9 @@ export class Enemy extends Phaser.GameObjects.Container {
     const distance = Phaser.Math.Distance.Between(this.x, this.y, this.targetX, this.targetY)
     let duration = (distance / this.speed) * 100
 
-    // 空タコの場合は基本持続時間を少し延長して、よりゆっくりとした着地感を演出
+    // 空タコの場合は初速重視（減速なし）
     if (this.enemyType === 'air') {
-      duration *= 1.5 // 1.5倍の時間をかけて移動
+      // 初速を重視し、時間調整は行わない
     }
 
     this.moveTween = this.scene.tweens.add({
@@ -162,8 +169,9 @@ export class Enemy extends Phaser.GameObjects.Container {
 
   private startPathfindingMovement() {
     if (!this.mapPanels) {
-      console.log(`${this.enemyType}タコ: マップパネル情報なし、直線移動`)
-      this.startDirectMovement()
+      console.error(`${this.enemyType}タコ: マップパネル情報なし - 移動不可`)
+      // パスファインディング専用タコはマップ情報必須
+      this.destroy()
       return
     }
 
@@ -171,8 +179,10 @@ export class Enemy extends Phaser.GameObjects.Container {
     const path = this.findPath()
     
     if (path.length === 0) {
-      console.log(`${this.enemyType}タコ: パスが見つからない、直線移動`)
-      this.startDirectMovement()
+      console.error(`${this.enemyType}タコ: パスが見つからない - 移動不可`)
+      // パスファインディング専用タコは直線移動フォールバックしない
+      // 敵を削除して新しい敵を生成する
+      this.destroy()
       return
     }
 
@@ -350,10 +360,10 @@ export class Enemy extends Phaser.GameObjects.Container {
       const distance = Phaser.Math.Distance.Between(this.x, this.y, target.x, target.y)
       let duration = (distance / this.speed) * 100
 
-      // 空タコの場合は進行度に応じて持続時間を調整（後半ほど長く）
+      // 空タコの場合は初速重視（進行度による減速を軽減）
       if (this.enemyType === 'air') {
         const progressRatio = currentIndex / path.length // 0〜1の進行度
-        const durationMultiplier = 1 + (progressRatio * 2) // 1倍〜3倍に持続時間延長
+        const durationMultiplier = 1 + (progressRatio * 0.5) // 1倍〜1.5倍に軽減
         duration *= durationMultiplier
       }
 
@@ -582,7 +592,7 @@ export class Enemy extends Phaser.GameObjects.Container {
     this.scene.tweens.add({
       targets: trailSprite,
       alpha: 0,
-      duration: 300, // 300msで消える
+      duration: 800, // 800msで消える
       onComplete: () => {
         // 配列から削除
         const index = this.trailSprites.indexOf(trailSprite)

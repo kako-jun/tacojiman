@@ -85,11 +85,22 @@ export function calculateEndingLevel(score: number): EndingLevel {
  * ズーム倍率に応じた表示色を決定
  */
 export function getZoomScoreColor(zoomMultiplier: number): string {
-  if (zoomMultiplier >= 3) return '#ff0000'     // 赤（最大ズーム）
-  if (zoomMultiplier >= 2.5) return '#ff4400'  // オレンジレッド（高ズーム）
-  if (zoomMultiplier >= 2) return '#ffaa00'    // オレンジ（中ズーム）
-  if (zoomMultiplier > 1) return '#ffff00'     // 黄色（軽ズーム）
-  return '#00ff00'                             // 緑（等倍）
+  if (zoomMultiplier >= 3) return '#00ff00'     // 緑（最大ズーム）
+  if (zoomMultiplier >= 2.5) return '#88ff00'  // 黄緑（高ズーム）
+  if (zoomMultiplier >= 2) return '#ffff00'    // 黄色（中ズーム）
+  if (zoomMultiplier > 1) return '#ffff88'     // 薄い黄色（軽ズーム）
+  return '#ffffff'                             // 白（等倍）
+}
+
+/**
+ * ズーム倍率に応じたフォントサイズを決定
+ */
+export function getZoomScoreFontSize(zoomMultiplier: number): string {
+  if (zoomMultiplier >= 3) return '32px'       // 最大サイズ
+  if (zoomMultiplier >= 2.5) return '28px'    // 大サイズ
+  if (zoomMultiplier >= 2) return '24px'      // 中サイズ
+  if (zoomMultiplier > 1) return '20px'       // やや小サイズ
+  return '18px'                               // 小さいサイズ
 }
 
 /**

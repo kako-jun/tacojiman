@@ -1,10 +1,10 @@
 import Phaser from 'phaser'
 
 export class Takokong extends Phaser.GameObjects.Container {
-  // 見た目HP2だが実質42回攻撃が必要
+  // 見た目HP2だが実質22回攻撃が必要
   public visualHP: number = 2 // 見た目のHP（1 or 2）
   public maxVisualHP: number = 2
-  public totalHitsRequired: number = 42 // 実際に必要な攻撃回数
+  public totalHitsRequired: number = 22 // 実際に必要な攻撃回数
   public currentHits: number = 0 // 現在の被攻撃回数
   
   // バリアシステム
@@ -118,7 +118,7 @@ export class Takokong extends Phaser.GameObjects.Container {
     this.moveTween = this.scene.tweens.add({
       targets: this,
       y: this.targetY - 50, // 家より少し上に位置
-      duration: 2000,
+      duration: 1000,
       ease: 'Power2',
       onComplete: () => {
         this.startBossBehavior()
@@ -160,17 +160,21 @@ export class Takokong extends Phaser.GameObjects.Container {
     }
 
     console.log(`タココング: パス見つかった (${path.length}ステップ)`)
-    // パスに沿って移動（地上タコより少し速い）
+    // パスに沿って移動（地下タコと同じ速度）
     this.moveAlongPath(path)
   }
 
   private startDirectMovement() {
     // 直線移動（フォールバック）
+    const distance = Phaser.Math.Distance.Between(this.x, this.y, this.targetX, this.targetY)
+    // タココングの高速移動（2.0）で計算
+    const duration = (distance / 2.0) * 100
+    
     this.moveTween = this.scene.tweens.add({
       targets: this,
       x: this.targetX,
       y: this.targetY,
-      duration: 8000, // 8秒で到達
+      duration: duration,
       ease: 'Linear',
       onComplete: () => {
         this.onReachTarget()
@@ -308,7 +312,7 @@ export class Takokong extends Phaser.GameObjects.Container {
 
       const target = path[currentIndex]
       const distance = Phaser.Math.Distance.Between(this.x, this.y, target.x, target.y)
-      // タココングは地上タコより少し速い（速度2.0）
+      // タココングの高速移動（速度2.0）
       const duration = (distance / 2.0) * 100
 
       this.moveTween = this.scene.tweens.add({
@@ -368,12 +372,8 @@ export class Takokong extends Phaser.GameObjects.Container {
         this.showBarrierHitEffect()
       }
     } else {
-      // バリアなし状態では10回で1ダメージ
-      if (this.currentHits % 10 === 0) {
-        this.dealActualDamage()
-      } else {
-        this.showBarrierHitEffect()
-      }
+      // バリアなし状態では1回で1ダメージ
+      this.dealActualDamage()
     }
     
     this.updateDisplay()
@@ -412,9 +412,37 @@ export class Takokong extends Phaser.GameObjects.Container {
     this.visualHP--
     this.showDamageEffect()
     
-    // 21回目の攻撃（HP2→HP1）で色変化
-    if (this.currentHits === 21) {
+    // 11回目の攻撃（HP2→HP1）で色変化とバリア復活
+    if (this.currentHits === 11) {
       this.sprite.setFillStyle(0xFF8888) // ピンク色に変更
+      
+      // バリアを復活させる
+      this.hasBarrier = true
+      this.currentBarrierHits = 0
+      this.barrierEffect.setVisible(true)
+      this.barrierEffect.setAlpha(0.3)
+      
+      // バリア復活エフェクト
+      this.scene.tweens.add({
+        targets: this.barrierEffect,
+        scaleX: 1.5,
+        scaleY: 1.5,
+        alpha: 0.6,
+        duration: 200,
+        yoyo: true,
+        onComplete: () => {
+          // 通常の脈動アニメーションを再開
+          this.scene.tweens.add({
+            targets: this.barrierEffect,
+            scaleX: 1.2,
+            scaleY: 1.2,
+            alpha: 0.1,
+            duration: 800,
+            yoyo: true,
+            repeat: -1
+          })
+        }
+      })
     }
   }
 

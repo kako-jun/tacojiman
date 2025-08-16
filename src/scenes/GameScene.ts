@@ -265,7 +265,7 @@ export class GameScene extends Phaser.Scene {
       })
     })
     
-    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+    const handlePointerUp = (pointer: Phaser.Input.Pointer) => {
       if (this.longPressTimer) {
         this.longPressTimer.remove()
         this.longPressTimer = null
@@ -281,10 +281,25 @@ export class GameScene extends Phaser.Scene {
       } else {
         this.handleShortTap(pointer)
       }
-    })
+    }
+
+    this.input.on('pointerup', handlePointerUp)
+    this.input.on('pointerupoutside', handlePointerUp) // 画面外でのポインターアップにも対応
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       // ズーム中のドラッグは無視（最初にタップした位置のみが重要）
+    })
+
+    // ウィンドウフォーカス離脱時もズームアウト
+    this.game.events.on('blur', () => {
+      if (this.longPressTimer) {
+        this.longPressTimer.remove()
+        this.longPressTimer = null
+      }
+      
+      if (this.cameraController.getIsZoomedIn()) {
+        this.cameraController.zoomOut()
+      }
     })
     
   }
@@ -301,8 +316,7 @@ export class GameScene extends Phaser.Scene {
     this.events.on('takokong-defeated', () => {
       this.currentScore += 100
       this.updateScoreDisplay()
-      // 1秒後にゲーム終了
-      this.time.delayedCall(1000, () => this.endGame())
+      // タココング撃破でもゲームは継続（180秒まで）
     })
 
     // タココング到達時のゲームオーバーは削除（スコア減算のみ）
@@ -752,20 +766,26 @@ export class GameScene extends Phaser.Scene {
     // 基本点 x ズーム倍率の表示
     const scoreText = `${baseScore} × ${zoomMultiplier.toFixed(1)}`
     
-    // ズーム倍率に応じて色を変える
-    let color = '#00ff00' // 緑（等倍）
+    // ズーム倍率に応じて色とサイズを変える（白→黄色→緑の順）
+    let color = '#ffffff' // 白（等倍）
+    let fontSize = '18px' // 小さいサイズ
+    
     if (zoomMultiplier >= 3) {
-      color = '#ff0000' // 赤（最大ズーム）
+      color = '#00ff00' // 緑（最大ズーム）
+      fontSize = '32px' // 最大サイズ
     } else if (zoomMultiplier >= 2.5) {
-      color = '#ff4400' // オレンジレッド（高ズーム）
+      color = '#88ff00' // 黄緑（高ズーム）
+      fontSize = '28px' // 大サイズ
     } else if (zoomMultiplier >= 2) {
-      color = '#ffaa00' // オレンジ（中ズーム）
+      color = '#ffff00' // 黄色（中ズーム）
+      fontSize = '24px' // 中サイズ
     } else if (zoomMultiplier > 1) {
-      color = '#ffff00' // 黄色（軽ズーム）
+      color = '#ffff88' // 薄い黄色（軽ズーム）
+      fontSize = '20px' // やや小サイズ
     }
     
     const scoreDisplay = this.add.text(x, y - 40, scoreText, {
-      fontSize: '24px',
+      fontSize: fontSize,
       color: color,
       fontFamily: 'monospace',
       fontStyle: 'bold',
@@ -796,10 +816,26 @@ export class GameScene extends Phaser.Scene {
     // フレームをテキストの後ろに配置
     frame.setDepth(scoreDisplay.depth - 1)
     
-    // スコアテキストアニメーション
+    // 画面中心方向への移動ベクトルを計算
+    const { width, height } = this.scale
+    const screenCenterX = width / 2
+    const screenCenterY = height / 2
+    
+    // 現在位置から画面中心への方向ベクトル
+    const directionX = screenCenterX - x
+    const directionY = screenCenterY - y
+    const distance = Math.sqrt(directionX * directionX + directionY * directionY)
+    
+    // 正規化して移動距離100ピクセル分のベクトルを計算
+    const moveDistance = 100
+    const normalizedX = distance > 0 ? (directionX / distance) * moveDistance : 0
+    const normalizedY = distance > 0 ? (directionY / distance) * moveDistance : -moveDistance // フォールバック
+    
+    // スコアテキストアニメーション（画面中心方向に移動）
     this.tweens.add({
       targets: [scoreDisplay, frame],
-      y: y - 100,
+      x: x + normalizedX,
+      y: y + normalizedY,
       scaleX: 1.2,
       scaleY: 1.2,
       alpha: 0,
@@ -909,8 +945,8 @@ export class GameScene extends Phaser.Scene {
           this.updateBombDisplay()
         }
         
-        // タココング出現（残り110秒 = ゲーム開始から70秒経過時）
-        if (this.gameTimeRemaining === 110 && !this.takokongSpawned) {
+        // タココング出現（残り10秒 = ゲーム開始から170秒経過時）
+        if (this.gameTimeRemaining === 10 && !this.takokongSpawned) {
           this.spawnTakokong()
         }
         

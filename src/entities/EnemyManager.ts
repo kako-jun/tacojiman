@@ -256,60 +256,71 @@ export class EnemyManager {
   
   private findPathEdgePosition(): { x: number; y: number } {
     const tileSize = 30
-    const pathPositions: { x: number; y: number }[] = []
+    const validPositions: { x: number; y: number; tileX: number; tileY: number }[] = []
     
-    // マップの端にあるあぜ道を探す
+    // マップの端にある地上タコ移動可能パネル（path + rail）を探す
     for (let x = 0; x < this.mapPanels.length; x++) {
       for (let y = 0; y < this.mapPanels[0].length; y++) {
         const panel = this.mapPanels[x][y]
-        if (panel && panel.type === 'path') {
+        if (panel && (panel.type === 'path' || panel.type === 'rail')) {
           // 端にあるかチェック
           if (x === 0 || x === this.mapPanels.length - 1 || 
               y === 0 || y === this.mapPanels[0].length - 1) {
             const worldX = this.mapWidth / 2 + (x - Math.floor(this.mapPanels.length / 2)) * tileSize
             const worldY = this.mapHeight / 2 + (y - Math.floor(this.mapPanels[0].length / 2)) * tileSize
-            pathPositions.push({ x: worldX, y: worldY })
+            validPositions.push({ x: worldX, y: worldY, tileX: x, tileY: y })
           }
         }
       }
     }
     
-    // ランダムなあぜ道の端を選択
-    if (pathPositions.length > 0) {
-      return pathPositions[Math.floor(Math.random() * pathPositions.length)]
+    // 各候補位置から家までのパスが存在するかチェック
+    const centerTileX = Math.floor(this.mapPanels.length / 2)
+    const centerTileY = Math.floor(this.mapPanels[0].length / 2)
+    
+    for (const pos of validPositions) {
+      if (this.hasValidPath(pos.tileX, pos.tileY, centerTileX, centerTileY, 'ground')) {
+        return { x: pos.x, y: pos.y }
+      }
     }
     
-    // あぜ道の端が見つからない場合はマップ端から
-    return { x: -30, y: Math.random() * this.mapHeight }
+    // パスが見つからない場合はエラー
+    console.error('地上タコの有効な出現位置が見つからない - マップ生成に問題がある')
+    throw new Error('地上タコの出現位置が確保できません')
   }
   
   private findWaterEdgePosition(): { x: number; y: number } {
     const tileSize = 30
-    const waterPositions: { x: number; y: number }[] = []
+    const validPositions: { x: number; y: number; tileX: number; tileY: number }[] = []
+    const centerTileX = Math.floor(this.mapPanels.length / 2)
+    const centerTileY = Math.floor(this.mapPanels[0].length / 2)
     
-    // マップの端にある水パネルを探す
+    // 自宅から最低1マス離れた水パネルから選択（難易度調整）
     for (let x = 0; x < this.mapPanels.length; x++) {
       for (let y = 0; y < this.mapPanels[0].length; y++) {
         const panel = this.mapPanels[x][y]
         if (panel && panel.type === 'water') {
-          // 端にあるかチェック
-          if (x === 0 || x === this.mapPanels.length - 1 || 
-              y === 0 || y === this.mapPanels[0].length - 1) {
+          // 自宅から1マス以上離れているかチェック
+          const distanceFromHome = Math.max(Math.abs(x - centerTileX), Math.abs(y - centerTileY))
+          if (distanceFromHome >= 1) {
             const worldX = this.mapWidth / 2 + (x - Math.floor(this.mapPanels.length / 2)) * tileSize
             const worldY = this.mapHeight / 2 + (y - Math.floor(this.mapPanels[0].length / 2)) * tileSize
-            waterPositions.push({ x: worldX, y: worldY })
+            validPositions.push({ x: worldX, y: worldY, tileX: x, tileY: y })
           }
         }
       }
     }
     
-    // ランダムな水パネルの端を選択
-    if (waterPositions.length > 0) {
-      return waterPositions[Math.floor(Math.random() * waterPositions.length)]
+    // 各候補位置から家までのパスが存在するかチェック
+    for (const pos of validPositions) {
+      if (this.hasValidPath(pos.tileX, pos.tileY, centerTileX, centerTileY, 'water')) {
+        return { x: pos.x, y: pos.y }
+      }
     }
     
-    // 水パネルの端が見つからない場合は上端から
-    return { x: Math.random() * this.mapWidth, y: -30 }
+    // パスが見つからない場合はエラー
+    console.error('水タコの有効な出現位置が見つからない - マップ生成に問題がある')
+    throw new Error('水タコの出現位置が確保できません')
   }
   
   private findUndergroundSpawnPosition(): { x: number; y: number } {
@@ -500,10 +511,10 @@ export class EnemyManager {
     return this.enemies.length
   }
 
-  public getEnemyAtPosition(x: number, y: number): Enemy | null {
-    // 指定した座標にある敵を探す
+  public getEnemyAtPosition(x: number, y: number, radius: number = 25): Enemy | null {
+    // 指定した座標にある敵を探す（ズーム判定用なので敵の実際のサイズに近づける）
     for (const enemy of this.enemies) {
-      if (enemy.checkCollision(x, y, 60)) { // 60ピクセルの当たり判定 - 指が隠れる範囲
+      if (enemy.checkCollision(x, y, radius)) {
         return enemy
       }
     }
@@ -566,6 +577,96 @@ export class EnemyManager {
       enemy.setTarget(closestDecoy.x, closestDecoy.y)
     } else {
       enemy.setTarget(this.playerHouseX, this.playerHouseY)
+    }
+  }
+
+  private hasValidPath(startX: number, startY: number, endX: number, endY: number, enemyType: string): boolean {
+    // 簡易パス検証（A*の簡略版）
+    const openSet: Array<{x: number, y: number, g: number, h: number, f: number}> = []
+    const closedSet = new Set<string>()
+    
+    const start = {
+      x: startX,
+      y: startY,
+      g: 0,
+      h: Math.abs(endX - startX) + Math.abs(endY - startY),
+      f: 0
+    }
+    start.f = start.g + start.h
+    openSet.push(start)
+
+    while (openSet.length > 0) {
+      openSet.sort((a, b) => a.f - b.f)
+      const current = openSet.shift()!
+      
+      if (current.x === endX && current.y === endY) {
+        return true // パスが見つかった
+      }
+      
+      closedSet.add(`${current.x},${current.y}`)
+      
+      const neighbors = [
+        {x: current.x + 1, y: current.y},
+        {x: current.x - 1, y: current.y},
+        {x: current.x, y: current.y + 1},
+        {x: current.x, y: current.y - 1}
+      ]
+      
+      for (const neighbor of neighbors) {
+        const neighborKey = `${neighbor.x},${neighbor.y}`
+        
+        if (!this.canMoveToTile(neighbor.x, neighbor.y, enemyType) || closedSet.has(neighborKey)) {
+          continue
+        }
+        
+        const g = current.g + 1
+        const h = Math.abs(endX - neighbor.x) + Math.abs(endY - neighbor.y)
+        const f = g + h
+        
+        const existingNode = openSet.find(node => node.x === neighbor.x && node.y === neighbor.y)
+        if (existingNode && existingNode.g <= g) {
+          continue
+        }
+        
+        if (existingNode) {
+          existingNode.g = g
+          existingNode.f = f
+        } else {
+          openSet.push({ x: neighbor.x, y: neighbor.y, g: g, h: h, f: f })
+        }
+      }
+      
+      // 探索制限（無限ループ防止）
+      if (openSet.length > 100) {
+        break
+      }
+    }
+
+    return false // パスが見つからない
+  }
+
+  private canMoveToTile(tileX: number, tileY: number, enemyType: string): boolean {
+    if (!this.mapPanels || 
+        tileX < 0 || tileX >= this.mapPanels.length ||
+        tileY < 0 || tileY >= this.mapPanels[0].length) {
+      return false
+    }
+
+    const panel = this.mapPanels[tileX][tileY]
+    if (!panel) return false
+
+    // 敵タイプに応じた移動制限
+    switch (enemyType) {
+      case 'ground':
+        return panel.type === 'path' || panel.type === 'rail'
+      case 'water':
+        return panel.type === 'water'
+      case 'underground':
+        return panel.type === 'rice_field' || panel.type === 'path'
+      case 'air':
+        return true // 制限なし
+      default:
+        return false
     }
   }
 

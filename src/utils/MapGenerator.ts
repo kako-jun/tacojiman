@@ -43,6 +43,9 @@ export class MapGenerator {
     // 7. 最後に残りを田んぼで埋める
     this.fillWithRiceFields()
     
+    // 8. 接続情報を更新
+    this.updateAllConnections()
+    
     return this.mapData as MapPanel[][]
   }
   
@@ -50,9 +53,13 @@ export class MapGenerator {
     const centerX = Math.floor(this.mapData.length / 2)
     const centerY = Math.floor(this.mapData[0].length / 2)
     
-    this.mapData[centerX][centerY] = {
-      x: centerX,
-      y: centerY,
+    // 自宅を十字路に面した位置に配置（交差点の右上）
+    const houseX = centerX + 1
+    const houseY = centerY - 1
+    
+    this.mapData[houseX][houseY] = {
+      x: houseX,
+      y: houseY,
       type: 'player_house',
       connections: { north: false, south: false, east: false, west: false }
     }
@@ -198,10 +205,120 @@ export class MapGenerator {
   }
   
   private generatePathsToHouse() {
-    // 4つのあぜ道を画面端から自宅につなげる（より多く）
-    for (let i = 0; i < 4; i++) {
-      this.generateSinglePathToHouse()
+    // 確実に家まで到達可能な十字路パスを生成
+    this.generateGuaranteedPaths()
+  }
+
+  private generateGuaranteedPaths() {
+    const tilesX = this.mapData.length
+    const tilesY = this.mapData[0].length
+    const centerX = Math.floor(tilesX / 2)
+    const centerY = Math.floor(tilesY / 2)
+    
+    // 1. 画面中央に縦のあぜ道を作成（上端から下端まで）
+    for (let y = 0; y < tilesY; y++) {
+      if (this.mapData[centerX][y] === null) {
+        this.mapData[centerX][y] = {
+          x: centerX,
+          y: y,
+          type: 'path',
+          connections: { north: false, south: false, east: false, west: false }
+        }
+      }
     }
+    
+    // 2. 画面中央に横のあぜ道を作成（左端から右端まで）
+    for (let x = 0; x < tilesX; x++) {
+      if (this.mapData[x][centerY] === null) {
+        this.mapData[x][centerY] = {
+          x: x,
+          y: centerY,
+          type: 'path',
+          connections: { north: false, south: false, east: false, west: false }
+        }
+      }
+    }
+    
+    // 3. 自宅は既にplacePlayerHouse()で配置済みなのでスキップ
+    
+    // 4. 水路を自宅の近くに作成（自宅から1マス離れた位置）
+    const waterOffsetX = centerX + 2 // 自宅から1マス右
+    const waterOffsetY = centerY + 2 // 自宅から2マス下
+    
+    // 縦の水路
+    for (let y = 0; y < tilesY; y++) {
+      if (this.mapData[waterOffsetX][y] === null) {
+        this.mapData[waterOffsetX][y] = {
+          x: waterOffsetX,
+          y: y,
+          type: 'water',
+          connections: { north: false, south: false, east: false, west: false }
+        }
+      }
+    }
+    
+    // 横の水路
+    for (let x = 0; x < tilesX; x++) {
+      if (this.mapData[x][waterOffsetY] === null) {
+        this.mapData[x][waterOffsetY] = {
+          x: x,
+          y: waterOffsetY,
+          type: 'water',
+          connections: { north: false, south: false, east: false, west: false }
+        }
+      }
+    }
+  }
+
+  private updateAllConnections() {
+    const tilesX = this.mapData.length
+    const tilesY = this.mapData[0].length
+    
+    for (let x = 0; x < tilesX; x++) {
+      for (let y = 0; y < tilesY; y++) {
+        const panel = this.mapData[x][y]
+        if (panel) {
+          this.updatePanelConnections(x, y)
+        }
+      }
+    }
+  }
+
+  private updatePanelConnections(x: number, y: number) {
+    const panel = this.mapData[x][y]
+    if (!panel) return
+
+    const connections = { north: false, south: false, east: false, west: false }
+
+    // 同じタイプの隣接パネルとの接続をチェック
+    if (y > 0 && this.mapData[x][y - 1]?.type === panel.type) {
+      connections.north = true
+    }
+    if (y < this.mapData[0].length - 1 && this.mapData[x][y + 1]?.type === panel.type) {
+      connections.south = true
+    }
+    if (x > 0 && this.mapData[x - 1][y]?.type === panel.type) {
+      connections.west = true
+    }
+    if (x < this.mapData.length - 1 && this.mapData[x + 1][y]?.type === panel.type) {
+      connections.east = true
+    }
+
+    // 地上タコの場合はpathとrailの相互接続も許可
+    if (panel.type === 'path') {
+      if (y > 0 && this.mapData[x][y - 1]?.type === 'rail') connections.north = true
+      if (y < this.mapData[0].length - 1 && this.mapData[x][y + 1]?.type === 'rail') connections.south = true
+      if (x > 0 && this.mapData[x - 1][y]?.type === 'rail') connections.west = true
+      if (x < this.mapData.length - 1 && this.mapData[x + 1][y]?.type === 'rail') connections.east = true
+    }
+    if (panel.type === 'rail') {
+      if (y > 0 && this.mapData[x][y - 1]?.type === 'path') connections.north = true
+      if (y < this.mapData[0].length - 1 && this.mapData[x][y + 1]?.type === 'path') connections.south = true
+      if (x > 0 && this.mapData[x - 1][y]?.type === 'path') connections.west = true
+      if (x < this.mapData.length - 1 && this.mapData[x + 1][y]?.type === 'path') connections.east = true
+    }
+
+    panel.connections = connections
   }
   
   private generateSinglePathToHouse() {

@@ -628,15 +628,36 @@ export class BombJutsu {
     // 分身の術 - テニスの王子様の菊丸風に2つの分身（本物含めて3個）
     const { width, height } = scene.scale
     
-    // 2つの分身出現位置（家を中心に120度ずつ配置）
-    const angle1 = Math.PI * 2 / 3  // 120度
-    const angle2 = Math.PI * 4 / 3  // 240度
-    const distance = 150
+    // 2つの分身出現位置（画面内にランダム配置、ただし家から近すぎない位置）
+    const minDistance = 100 // 家から最低100ピクセル離れる
+    const maxDistance = Math.min(width, height) / 3 // 画面の1/3以内
     
-    const decoy1X = homeX + Math.cos(angle1) * distance
-    const decoy1Y = homeY + Math.sin(angle1) * distance
-    const decoy2X = homeX + Math.cos(angle2) * distance
-    const decoy2Y = homeY + Math.sin(angle2) * distance
+    // 分身1の位置をランダム決定
+    let decoy1X, decoy1Y
+    let attempts = 0
+    do {
+      const angle1 = Math.random() * Math.PI * 2
+      const distance1 = minDistance + Math.random() * (maxDistance - minDistance)
+      decoy1X = homeX + Math.cos(angle1) * distance1
+      decoy1Y = homeY + Math.sin(angle1) * distance1
+      attempts++
+    } while ((decoy1X < 50 || decoy1X > width - 50 || decoy1Y < 50 || decoy1Y > height - 50) && attempts < 20)
+    
+    // 分身2の位置をランダム決定（分身1から十分離れた位置）
+    let decoy2X, decoy2Y
+    attempts = 0
+    do {
+      const angle2 = Math.random() * Math.PI * 2
+      const distance2 = minDistance + Math.random() * (maxDistance - minDistance)
+      decoy2X = homeX + Math.cos(angle2) * distance2
+      decoy2Y = homeY + Math.sin(angle2) * distance2
+      
+      // 分身1との距離もチェック
+      const distanceBetweenDecoys = Math.sqrt((decoy2X - decoy1X) ** 2 + (decoy2Y - decoy1Y) ** 2)
+      if (distanceBetweenDecoys < 80) continue // 分身同士が近すぎる場合は再計算
+      
+      attempts++
+    } while ((decoy2X < 50 || decoy2X > width - 50 || decoy2Y < 50 || decoy2Y > height - 50) && attempts < 20)
     
     // 忍術発動エフェクト（菊丸風の煙幕）
     const smokeEffect = scene.add.circle(homeX, homeY, 50, 0x888888, 0.8)

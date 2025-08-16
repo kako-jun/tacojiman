@@ -35,7 +35,8 @@ export const GAME_CONFIG = {
     TAKOKONG_ATTACK_RADIUS: 40,            // タココング攻撃の半径
     HOUSE_CLICK_RADIUS: 30,                // 家クリック判定の半径
     HOUSE_REACH_RADIUS: 25,                // 敵が家に到達とみなす半径
-    ENEMY_COLLISION_RADIUS: 60,            // 敵との当たり判定半径
+    ENEMY_COLLISION_RADIUS: 60,            // 敵との当たり判定半径（攻撃時）
+    ENEMY_ZOOM_DETECTION_RADIUS: 25,       // 敵のズーム判定半径（敵の実サイズ相当）
   },
 
   // 敵システム設定

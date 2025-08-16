@@ -85,7 +85,7 @@ export const ENEMY_DATA = [
   EnemyDataSchema.parse({
     type: 'air',
     hp: 2,
-    speed: 1.8, // 空タコ：最も早い（空を飛ぶ）
+    speed: 3.0, // 空タコ：最も早い（空を飛ぶ）
     score: 3,
     spawnRoute: 'sky',
     color: { hp2: '#FF4444', hp1: '#FF8888' }
@@ -158,7 +158,7 @@ export const BOMB_DATA = [
     description: '菊丸風2つの分身・本物含め3個で敵を誘導',
     damage: 0, // ダメージなし
     duration: 5, // 5秒間
-    range: 50  // 誘導範囲
+    range: 200  // 誘導範囲
   })
 ] as const
 

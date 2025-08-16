@@ -4,7 +4,7 @@
  */
 
 import Phaser from 'phaser'
-import { getZoomScoreColor, getDamageDisplayStyle } from '@/utils/domain/ScoreCalculator'
+import { getZoomScoreColor, getZoomScoreFontSize, getDamageDisplayStyle } from '@/utils/domain/ScoreCalculator'
 import { GAME_CONFIG } from '@/utils/GameConfig'
 
 export interface EffectDisplayOptions {
@@ -35,9 +35,10 @@ export class EffectManager {
     const config = GAME_CONFIG.EFFECTS.SCORE_DISPLAY
     const scoreText = `${baseScore} × ${zoomMultiplier.toFixed(1)}`
     const color = getZoomScoreColor(zoomMultiplier)
+    const fontSize = getZoomScoreFontSize(zoomMultiplier)
     
     const scoreDisplay = this.scene.add.text(x, y + config.OFFSET_Y, scoreText, {
-      fontSize: '24px',
+      fontSize: fontSize,
       color: color,
       fontFamily: GAME_CONFIG.UI.FONT_SETTINGS.FAMILY,
       fontStyle: 'bold',
@@ -55,10 +56,26 @@ export class EffectManager {
     // 枠を追加
     const frame = this.createTextFrame(scoreDisplay, color, config.PADDING)
     
-    // アニメーション
+    // 画面中心方向への移動ベクトルを計算
+    const { width, height } = this.scene.scale
+    const screenCenterX = width / 2
+    const screenCenterY = height / 2
+    
+    // 現在位置から画面中心への方向ベクトル
+    const directionX = screenCenterX - x
+    const directionY = screenCenterY - y
+    const distance = Math.sqrt(directionX * directionX + directionY * directionY)
+    
+    // 正規化して移動距離分のベクトルを計算
+    const moveDistance = Math.abs(config.MOVE_DISTANCE)
+    const normalizedX = distance > 0 ? (directionX / distance) * moveDistance : 0
+    const normalizedY = distance > 0 ? (directionY / distance) * moveDistance : config.MOVE_DISTANCE // フォールバック
+    
+    // アニメーション（画面中心方向に移動）
     this.scene.tweens.add({
       targets: [scoreDisplay, frame],
-      y: y + config.MOVE_DISTANCE,
+      x: x + normalizedX,
+      y: y + normalizedY,
       scaleX: 1.2,
       scaleY: 1.2,
       alpha: 0,

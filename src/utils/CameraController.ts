@@ -110,11 +110,16 @@ export class CameraController {
     const startCenterX = this.camera.scrollX + this.camera.width / 2
     const startCenterY = this.camera.scrollY + this.camera.height / 2
 
-    // ズームアウト（半分の速度 = 2秒）
+    // 現在のズーム率に応じて時間を計算（ズームインと同じ計算方式）
+    const currentZoom = this.camera.zoom
+    const zoomProgress = (currentZoom - 1) / (this.zoomLevel - 1) // 現在の進行度 (0-1)
+    const duration = zoomProgress * 1000 // 進行度に応じた時間（最大1秒）
+
+    // ズームアウト（ズームインと同じ速度）
     this.zoomOutTween = this.scene.tweens.add({
       targets: this.camera,
       zoom: 1,
-      duration: 2000, // ズームインの半分の速度（2秒）
+      duration: Math.max(duration, 50), // 最低50ms
       ease: 'Linear',
       onUpdate: () => {
         // ズーム進行度（3倍→1倍への進行度）
