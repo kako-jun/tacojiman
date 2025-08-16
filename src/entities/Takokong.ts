@@ -115,7 +115,7 @@ export class Takokong extends Phaser.GameObjects.Container {
     
     this.scene.time.delayedCall(200, () => {
       // 画面フラッシュ
-      this.scene.cameras.main.flash(300, 255, 0, 255)
+      // 登場演出（フラッシュなし）
       this.scene.cameras.main.fadeIn(300)
       
       // 登場移動
@@ -224,7 +224,7 @@ export class Takokong extends Phaser.GameObjects.Container {
     })
     
     // バリア破壊音（光エフェクト）
-    this.scene.cameras.main.flash(200, 0, 255, 255)
+    // バリア破壊演出（フラッシュなし）
   }
   
   private dealActualDamage() {
@@ -324,7 +324,7 @@ export class Takokong extends Phaser.GameObjects.Container {
     }
     
     // 撃破演出
-    this.scene.cameras.main.flash(500, 255, 255, 255)
+    // 撃破演出（フラッシュなし）
     this.scene.cameras.main.shake(1000, 15)
     
     // 爆発エフェクト

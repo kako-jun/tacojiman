@@ -42,8 +42,8 @@ export class EndingScene extends Phaser.Scene {
     // スコア表示
     this.showScoreResults(width, height)
     
-    // リトライボタン
-    this.createRetryButton(width, height)
+    // 画面全体タップでリプレイ
+    this.setupReplayInput()
   }
 
   private calculateEndingLevel(score: number): number {
@@ -164,31 +164,19 @@ export class EndingScene extends Phaser.Scene {
     }).setOrigin(0.5)
   }
 
-  private createRetryButton(width: number, height: number) {
-    const retryButton = this.add.text(width / 2, height * 0.9, 'もう一度プレイ', {
-      fontSize: '20px',
-      color: '#ffffff',
-      fontFamily: 'monospace',
-      stroke: '#000000',
-      strokeThickness: 2,
-      backgroundColor: '#333333',
-      padding: { x: 20, y: 10 }
-    }).setOrigin(0.5)
-
-    retryButton.setInteractive()
-    
-    // ホバー効果
-    retryButton.on('pointerover', () => {
-      retryButton.setScale(1.1)
-    })
-    
-    retryButton.on('pointerout', () => {
-      retryButton.setScale(1)
-    })
-    
-    // クリックでタイトルに戻る
-    retryButton.on('pointerdown', () => {
+  private setupReplayInput() {
+    // 画面全体をタップ可能エリアに設定
+    this.input.once('pointerdown', () => {
       this.scene.start('TitleScene')
     })
+    
+    // タップ可能であることを示すテキスト
+    const { width, height } = this.scale
+    this.add.text(width / 2, height * 0.9, 'タップでタイトルへ', {
+      fontSize: '16px',
+      color: '#aaaaaa',
+      fontFamily: 'monospace',
+      alpha: 0.7
+    }).setOrigin(0.5)
   }
 }

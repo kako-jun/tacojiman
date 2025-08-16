@@ -10,6 +10,7 @@ export class CameraController {
   private homeY: number
   private isZooming: boolean = false
   private zoomTween: Phaser.Tweens.Tween | null = null
+  private zoomOutTween: Phaser.Tweens.Tween | null = null
   private isZoomingOut: boolean = false
 
   constructor(scene: Phaser.Scene, homeX: number, homeY: number) {
@@ -25,30 +26,58 @@ export class CameraController {
   }
 
   public startZoomIn(targetX: number, targetY: number, zoomLevel: number = 3) {
-    if (this.isZooming) return
+    // 既に最大ズームに達している場合は何もしない
+    if (this.camera.zoom >= zoomLevel) {
+      return
+    }
+    
+    // ズームアウト中の場合は停止
+    if (this.isZoomingOut) {
+      this.stopZoomOut()
+    }
+    
+    // 既にズームイン中の場合は停止
+    if (this.isZooming) {
+      this.stopZoomIn()
+    }
 
     this.isZooming = true
     this.isZoomedIn = true
     this.zoomLevel = zoomLevel
     this.zoomTarget = { x: targetX, y: targetY }
 
-    // 家中心から開始して、1秒後にタップ位置が中心になるズームイン
+    // 現在のズーム率から目標ズーム率までの残り時間を計算
+    const currentZoom = this.camera.zoom
+    const zoomProgress = (currentZoom - 1) / (zoomLevel - 1) // 現在の進行度 (0-1)
+    const remainingDuration = (1 - zoomProgress) * 1000 // 残り時間（ms）
+
+    // 現在のカメラ中心位置を取得
+    const currentCenterX = this.camera.scrollX + this.camera.width / 2
+    const currentCenterY = this.camera.scrollY + this.camera.height / 2
+
     this.zoomTween = this.scene.tweens.add({
       targets: this.camera,
       zoom: zoomLevel,
-      duration: 1000, // 1秒かけて3倍ズーム
+      duration: Math.max(remainingDuration, 50), // 最低50ms
       ease: 'Linear',
       onUpdate: () => {
-        // ズーム進行度（0→1）
-        const progress = (this.camera.zoom - 1) / (zoomLevel - 1)
+        // 全体の進行度（1倍→3倍の線形グラフ上での位置）
+        const totalProgress = (this.camera.zoom - 1) / (zoomLevel - 1)
         
-        // 家の位置からタップ位置へ中心を補間
-        const currentCenterX = this.homeX + (targetX - this.homeX) * progress
-        const currentCenterY = this.homeY + (targetY - this.homeY) * progress
-        
-        // centerOnの代わりにscrollX/Yを直接設定
-        this.camera.scrollX = currentCenterX - this.camera.width / 2
-        this.camera.scrollY = currentCenterY - this.camera.height / 2
+        // ゼロ除算防止
+        const progressDelta = 1 - zoomProgress
+        if (progressDelta <= 0.001) {
+          // 既にほぼ完了している場合は位置を固定
+          this.camera.scrollX = targetX - this.camera.width / 2
+          this.camera.scrollY = targetY - this.camera.height / 2
+        } else {
+          // カメラ中心位置の補間（現在位置→タップ位置）
+          const centerX = currentCenterX + (targetX - currentCenterX) * ((totalProgress - zoomProgress) / progressDelta)
+          const centerY = currentCenterY + (targetY - currentCenterY) * ((totalProgress - zoomProgress) / progressDelta)
+          
+          this.camera.scrollX = centerX - this.camera.width / 2
+          this.camera.scrollY = centerY - this.camera.height / 2
+        }
       }
     })
   }
@@ -59,6 +88,14 @@ export class CameraController {
       this.zoomTween = null
     }
     this.isZooming = false
+  }
+
+  public stopZoomOut() {
+    if (this.zoomOutTween) {
+      this.zoomOutTween.stop()
+      this.zoomOutTween = null
+    }
+    this.isZoomingOut = false
   }
 
   public zoomOut() {
@@ -74,7 +111,7 @@ export class CameraController {
     const startCenterY = this.camera.scrollY + this.camera.height / 2
 
     // ズームアウト（半分の速度 = 2秒）
-    this.scene.tweens.add({
+    this.zoomOutTween = this.scene.tweens.add({
       targets: this.camera,
       zoom: 1,
       duration: 2000, // ズームインの半分の速度（2秒）
@@ -94,6 +131,7 @@ export class CameraController {
       onComplete: () => {
         this.zoomTarget = null
         this.isZoomingOut = false
+        this.zoomOutTween = null
       }
     })
   }

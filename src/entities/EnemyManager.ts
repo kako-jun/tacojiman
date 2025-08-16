@@ -124,20 +124,29 @@ export class EnemyManager {
   }
 
   public checkAttackHit(x: number, y: number, radius: number = 15): { hit: boolean; score: number; enemy?: Enemy } {
+    let totalScore = 0
+    let hit = false
+    let firstEnemy: Enemy | undefined = undefined
+    
+    // 範囲内のすべての敵にダメージを与える
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const enemy = this.enemies[i]
       if (enemy.checkCollision(x, y, radius)) {
         const result = enemy.takeDamage(1)
+        totalScore += result.score
+        hit = true
+        
+        if (!firstEnemy) {
+          firstEnemy = enemy
+        }
         
         if (result.destroyed) {
           this.enemies.splice(i, 1)
         }
-        
-        return { hit: true, score: result.score, enemy }
       }
     }
     
-    return { hit: false, score: 0 }
+    return { hit, score: totalScore, enemy: firstEnemy }
   }
 
   public checkBombHit(x: number, y: number, radius: number, damage: number = 1): number {

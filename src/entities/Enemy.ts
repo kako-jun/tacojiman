@@ -13,6 +13,13 @@ export class Enemy extends Phaser.GameObjects.Container {
   private targetX: number
   private targetY: number
   private moveTween: Phaser.Tweens.Tween | null = null
+  
+  // 残像システム
+  private trailSprites: Phaser.GameObjects.Shape[] = []
+  private lastPosition: { x: number; y: number } = { x: 0, y: 0 }
+  private trailTimer: number = 0
+  private readonly TRAIL_INTERVAL = 50 // 50msごとに残像を作成
+  private readonly MAX_TRAIL_LENGTH = 5 // 最大5個の残像
 
   constructor(
     scene: Phaser.Scene, 
@@ -31,6 +38,7 @@ export class Enemy extends Phaser.GameObjects.Container {
     this.scoreValue = enemyData.score
     this.targetX = targetX
     this.targetY = targetY
+    
 
     // 敵スプライト作成
     this.createSprite(enemyData)
@@ -40,6 +48,12 @@ export class Enemy extends Phaser.GameObjects.Container {
     
     // 敵はUIより低いdepthに設定
     this.setDepth(100)
+    
+    // 初期位置を記録
+    this.lastPosition = { x: this.x, y: this.y }
+    
+    // 残像更新タイマーを開始
+    this.startTrailSystem()
     
     // 移動開始
     this.startMovement()
@@ -187,6 +201,96 @@ export class Enemy extends Phaser.GameObjects.Container {
     return distance <= radius
   }
 
+  private startTrailSystem() {
+    if (!this.scene || !this.scene.time) return
+    
+    // 定期的に残像をチェック・作成
+    this.scene.time.addEvent({
+      delay: this.TRAIL_INTERVAL,
+      callback: this.updateTrail,
+      callbackScope: this,
+      loop: true
+    })
+  }
+
+  private updateTrail() {
+    if (!this.scene) return
+    
+    // 位置が変わった場合のみ残像を作成
+    const distance = Phaser.Math.Distance.Between(this.x, this.y, this.lastPosition.x, this.lastPosition.y)
+    if (distance > 5) { // 5ピクセル以上移動した場合
+      this.createTrailSprite(this.lastPosition.x, this.lastPosition.y)
+      this.lastPosition = { x: this.x, y: this.y }
+    }
+  }
+
+  private createTrailSprite(x: number, y: number) {
+    if (!this.scene) return
+    
+    // 残像の数が上限に達した場合、古いものを削除
+    if (this.trailSprites.length >= this.MAX_TRAIL_LENGTH) {
+      const oldTrail = this.trailSprites.shift()
+      if (oldTrail) {
+        oldTrail.destroy()
+      }
+    }
+
+    // 現在のスプライトと同じ形状で残像を作成
+    const size = this.currentHP === 2 ? 24 : 20
+    const color = this.currentHP === 2 ? 
+      0xFF4444 : // HP2の色（少し薄く）
+      0xFF8888   // HP1の色（少し薄く）
+
+    let trailSprite: Phaser.GameObjects.Shape
+
+    // 敵タイプに応じた形状で残像作成
+    switch (this.enemyType) {
+      case 'ground':
+        trailSprite = this.scene.add.rectangle(x, y, size, size, color)
+        break
+      case 'water':
+        trailSprite = this.scene.add.circle(x, y, size / 2, color)
+        break
+      case 'air':
+        trailSprite = this.scene.add.triangle(x, y, 0, -size/2, -size/2, size/2, size/2, size/2, color)
+        break
+      case 'underground':
+        const points = [
+          0, -size/2,    // 上
+          size/2, 0,     // 右
+          0, size/2,     // 下
+          -size/2, 0     // 左
+        ]
+        trailSprite = this.scene.add.polygon(x, y, points, color)
+        break
+      default:
+        trailSprite = this.scene.add.rectangle(x, y, size, size, color)
+        break
+    }
+
+    // 残像の設定
+    trailSprite.setAlpha(0.4) // 透明度を設定
+    trailSprite.setDepth(90)  // 敵より少し後ろに配置
+    
+    // 残像を配列に追加
+    this.trailSprites.push(trailSprite)
+
+    // 残像を徐々に消す
+    this.scene.tweens.add({
+      targets: trailSprite,
+      alpha: 0,
+      duration: 300, // 300msで消える
+      onComplete: () => {
+        // 配列から削除
+        const index = this.trailSprites.indexOf(trailSprite)
+        if (index > -1) {
+          this.trailSprites.splice(index, 1)
+        }
+        trailSprite.destroy()
+      }
+    })
+  }
+
   public pauseMovement() {
     if (this.moveTween) {
       this.moveTween.pause()
@@ -217,6 +321,15 @@ export class Enemy extends Phaser.GameObjects.Container {
     if (this.moveTween) {
       this.moveTween.remove()
     }
+    
+    // 残像をクリーンアップ
+    this.trailSprites.forEach(trailSprite => {
+      if (trailSprite) {
+        trailSprite.destroy()
+      }
+    })
+    this.trailSprites = []
+    
     super.destroy(fromScene)
   }
 }

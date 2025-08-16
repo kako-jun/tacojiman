@@ -247,19 +247,18 @@ export class GameScene extends Phaser.Scene {
 
   private setupInput() {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      // ズームアウト中は新しいタップを無視
-      if (this.cameraController.getIsZoomingOut()) {
-        return
-      }
+      // ズームアウト中でもタップを許可（ズームインを再開）
       
       this.isLongPress = false
       
-      // タップした位置にある敵をチェック
+      // タップした位置の攻撃範囲内に敵がいるかチェック（ダメージを与えない）
       const worldPoint = this.cameraController.getWorldPoint(pointer.x, pointer.y)
-      const clickedEnemy = this.enemyManager.getEnemyAtPosition(worldPoint.x, worldPoint.y)
+      const enemyAtPosition = this.enemyManager.getEnemyAtPosition(worldPoint.x, worldPoint.y)
+      const takokongHit = this.takokong && this.takokong.checkCollision(worldPoint.x, worldPoint.y, 60)
+      const houseHit = this.checkHouseClick(worldPoint.x, worldPoint.y)
       
-      // 敵がクリックされた場合はズームを開始しない
-      if (!clickedEnemy) {
+      // 攻撃が当たる範囲内に敵がいる場合、または家をクリックした場合はズームを開始しない
+      if (!enemyAtPosition && !takokongHit && !houseHit) {
         // タップ開始と同時にズーム開始
         this.cameraController.startZoomIn(worldPoint.x, worldPoint.y, 3.0)
       }
@@ -289,9 +288,9 @@ export class GameScene extends Phaser.Scene {
     })
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      // ズーム中のドラッグは完全に無視
-      // 最初にタップした位置のみが重要
+      // ズーム中のドラッグは無視（最初にタップした位置のみが重要）
     })
+    
   }
 
   private setupEventListeners() {
@@ -486,12 +485,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handleLongPressEnd(pointer: Phaser.Input.Pointer) {
-    if (this.cameraController.getIsZoomedIn()) {
-      // ズーム中の連続攻撃
-      const worldPoint = this.cameraController.getWorldPoint(pointer.x, pointer.y)
-      this.performContinuousAttack(worldPoint.x, worldPoint.y)
+    // ズーム中断タップ：ズームアウト + その位置で攻撃
+    const worldPoint = this.cameraController.getWorldPoint(pointer.x, pointer.y)
+    
+    if (this.checkHouseClick(worldPoint.x, worldPoint.y)) {
+      this.activateBombJutsu()
+    } else {
+      this.performBeeAttack(worldPoint.x, worldPoint.y)
     }
-    // ズームアウトはpointerupで既に呼ばれているので削除
   }
 
   private checkHouseClick(x: number, y: number): boolean {
@@ -520,14 +521,6 @@ export class GameScene extends Phaser.Scene {
     
     this.updateScoreDisplay()
     this.showAttackEffect(x, y, hit)
-  }
-
-  private performContinuousAttack(x: number, y: number) {
-    // 連続攻撃（通常攻撃と同じ80ピクセル範囲）
-    const totalScore = this.enemyManager.checkBombHit(x, y, 80, 1)
-    this.currentScore += totalScore
-    this.updateScoreDisplay()
-    this.showBombEffect(x, y, 80) // エフェクトも攻撃判定と同じ範囲
   }
 
   private activateBombJutsu() {
@@ -672,12 +665,11 @@ export class GameScene extends Phaser.Scene {
 
   private showAttackEffect(x: number, y: number, hit: boolean) {
     const color = hit ? 0xffff00 : 0x888888
-    const effect = this.add.circle(x, y, 10, color, 0.8)
+    // 攻撃判定80ピクセル半径に正確に合わせる：Phaserのadd.circleは半径指定なので40
+    const effect = this.add.circle(x, y, 40, color, 0.5)
     
     this.tweens.add({
       targets: effect,
-      scaleX: hit ? 2 : 1.5,
-      scaleY: hit ? 2 : 1.5,
       alpha: 0,
       duration: 300,
       onComplete: () => effect.destroy()
@@ -685,12 +677,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private showBombEffect(x: number, y: number, radius: number) {
+    // ボム攻撃エフェクト（指定された半径のまま、拡大なし）
     const effect = this.add.circle(x, y, radius, 0xff4444, 0.6)
     
     this.tweens.add({
       targets: effect,
-      scaleX: 2,
-      scaleY: 2,
       alpha: 0,
       duration: 500,
       onComplete: () => effect.destroy()

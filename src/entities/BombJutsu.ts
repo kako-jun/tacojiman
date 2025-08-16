@@ -190,8 +190,7 @@ export class BombJutsu {
   private activateMutekiHoudai(scene: Phaser.Scene, homeX: number, homeY: number) {
     const { width, height } = scene.scale
     
-    // ピカッと光る初期エフェクト
-    scene.cameras.main.flash(200, 255, 255, 255)
+    // 初期エフェクト（画面フラッシュなし）
     
     // 初期の光エフェクト
     const flashEffect = scene.add.circle(homeX, homeY, 20, 0xffffff, 0.9)
@@ -373,9 +372,8 @@ export class BombJutsu {
       onComplete: () => explosion.destroy()
     })
     
-    // 強烈なカメラシェイク
+    // 強烈なカメラシェイク（フラッシュなし）
     scene.cameras.main.shake(1000, 15)
-    scene.cameras.main.flash(300, 255, 255, 255)
     
     // ダメージ判定
     scene.events.emit('sol-strike', {
@@ -573,8 +571,7 @@ export class BombJutsu {
     // 巨大爆発（ソイフォンのばんかい風）
     const mainExplosion = scene.add.circle(x, y, this.data.range, 0xffffff, 0.9)
     
-    // 強烈なフラッシュ
-    scene.cameras.main.flash(500, 255, 255, 0)
+    // 強烈なシェイク（フラッシュなし）
     scene.cameras.main.shake(800, 20)
     
     // 爆発アニメーション
@@ -671,21 +668,12 @@ export class BombJutsu {
     decoyFuton.setStrokeStyle(2, 0xffffff)
     decoyFuton.setAlpha(0.7) // 分身感を強調
     
-    // 分身マーク（菊丸風）
-    const decoyMark = scene.add.text(x, y - 25, `分身${decoyNumber}`, {
-      fontSize: '12px',
-      color: '#ffff00',
-      fontFamily: 'monospace',
-      stroke: '#000000',
-      strokeThickness: 1
-    }).setOrigin(0.5)
-    
     // 出現エフェクト（菊丸風の高速出現）
     decoyFuton.setScale(0)
     decoyFuton.setRotation(Math.PI * 2) // 1回転しながら出現
     
     scene.tweens.add({
-      targets: [decoyFuton, decoyMark],
+      targets: decoyFuton,
       scaleX: 1,
       scaleY: 1,
       rotation: 0,
@@ -755,7 +743,6 @@ export class BombJutsu {
       pulseEffect.remove()
       afterImageTimer.remove()
       decoyFuton.destroy()
-      decoyMark.destroy()
     })
   }
   
