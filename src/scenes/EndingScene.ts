@@ -3,6 +3,7 @@ import Phaser from 'phaser'
 interface EndingData {
   score: number
   timeSpent: number
+  screenshots?: string[]
 }
 
 export class EndingScene extends Phaser.Scene {
@@ -10,6 +11,7 @@ export class EndingScene extends Phaser.Scene {
   private timeSpent: number = 0
   private endingLevel: number = 0
   private currentProgress: number = 0
+  private screenshots: string[] = []
 
   constructor() {
     super({ key: 'EndingScene' })
@@ -18,6 +20,7 @@ export class EndingScene extends Phaser.Scene {
   init(data: EndingData) {
     this.score = data.score || 0
     this.timeSpent = data.timeSpent || 0
+    this.screenshots = data.screenshots || []
     
     // スコアに応じてエンディングレベル決定
     this.endingLevel = this.calculateEndingLevel(this.score)
@@ -41,6 +44,9 @@ export class EndingScene extends Phaser.Scene {
     
     // スコア表示
     this.showScoreResults(width, height)
+    
+    // スクリーンショット表示
+    this.showScreenshots(width, height)
     
     // 画面全体タップでリプレイ
     this.setupReplayInput()
@@ -147,8 +153,8 @@ export class EndingScene extends Phaser.Scene {
   }
 
   private showScoreResults(width: number, height: number) {
-    // スコア表示
-    this.add.text(width / 2, height * 0.75, `Final Score: ${this.score}`, {
+    // スコア表示（位置を少し上に調整）
+    this.add.text(width / 2, height * 0.68, `Final Score: ${this.score}`, {
       fontSize: '24px',
       color: '#ffffff',
       fontFamily: 'monospace',
@@ -157,11 +163,60 @@ export class EndingScene extends Phaser.Scene {
     }).setOrigin(0.5)
 
     // プレイ時間
-    this.add.text(width / 2, height * 0.8, `Time: ${this.timeSpent}s`, {
+    this.add.text(width / 2, height * 0.72, `Time: ${this.timeSpent}s`, {
       fontSize: '18px',
       color: '#cccccc',
       fontFamily: 'monospace'
     }).setOrigin(0.5)
+  }
+
+  private showScreenshots(width: number, height: number) {
+    if (this.screenshots.length === 0) {
+      // スクリーンショットがない場合のメッセージ
+      this.add.text(width / 2, height * 0.82, 'No screenshots captured', {
+        fontSize: '14px',
+        color: '#666666',
+        fontFamily: 'monospace'
+      }).setOrigin(0.5)
+      return
+    }
+
+    // スクリーンショット表示エリアのタイトル
+    this.add.text(width / 2, height * 0.76, `Screenshots (${this.screenshots.length}/3)`, {
+      fontSize: '16px',
+      color: '#aaaaaa',
+      fontFamily: 'monospace'
+    }).setOrigin(0.5)
+
+    // スクリーンショットを小さなサムネイルとして横並びで表示
+    const thumbnailWidth = 80
+    const thumbnailHeight = 60
+    const spacing = 90
+    const startX = width / 2 - (this.screenshots.length - 1) * spacing / 2
+
+    this.screenshots.forEach((screenshotData, index) => {
+      const x = startX + index * spacing
+      const y = height * 0.84
+
+      try {
+        // base64データからテクスチャを作成
+        const texture = this.textures.addBase64(`screenshot_${index}`, screenshotData)
+        if (texture) {
+          const thumbnail = this.add.image(x, y, `screenshot_${index}`)
+          thumbnail.setDisplaySize(thumbnailWidth, thumbnailHeight)
+          
+          // 枠線を追加
+          const border = this.add.rectangle(x, y, thumbnailWidth + 4, thumbnailHeight + 4)
+          border.setStrokeStyle(2, 0xffffff, 0.8)
+          border.setDepth(thumbnail.depth - 1)
+        }
+      } catch (error) {
+        console.warn(`スクリーンショット ${index} の表示に失敗:`, error)
+        // エラー時は灰色の矩形を表示
+        const placeholder = this.add.rectangle(x, y, thumbnailWidth, thumbnailHeight, 0x444444)
+        placeholder.setStrokeStyle(2, 0x666666)
+      }
+    })
   }
 
   private setupReplayInput() {

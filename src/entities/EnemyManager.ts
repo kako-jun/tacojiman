@@ -379,8 +379,9 @@ export class EnemyManager {
     }
   }
 
-  public checkAttackHit(x: number, y: number, radius: number = 15, filter?: (enemy: Enemy) => boolean, zoomMultiplier: number = 1): { hit: boolean; score: number; enemy?: Enemy } {
+  public checkAttackHit(x: number, y: number, radius: number = 15, filter?: (enemy: Enemy) => boolean, zoomMultiplier: number = 1): { hit: boolean; score: number; baseScore: number; enemy?: Enemy } {
     let totalScore = 0
+    let totalBaseScore = 0
     let hit = false
     let firstEnemy: Enemy | undefined = undefined
     
@@ -395,7 +396,18 @@ export class EnemyManager {
         
         const result = enemy.takeDamage(1, zoomMultiplier)
         totalScore += result.score
+        totalBaseScore += enemy.scoreValue // 基本点を累積
         hit = true
+        
+        // 個別にスコア表示を発生させる
+        if (result.score > 0) {
+          this.scene.events.emit('show-score-gain', {
+            x: enemy.x,
+            y: enemy.y,
+            baseScore: enemy.scoreValue,
+            zoomMultiplier: zoomMultiplier
+          })
+        }
         
         if (!firstEnemy) {
           firstEnemy = enemy
@@ -407,7 +419,7 @@ export class EnemyManager {
       }
     }
     
-    return { hit, score: totalScore, enemy: firstEnemy }
+    return { hit, score: totalScore, baseScore: totalBaseScore, enemy: firstEnemy }
   }
 
   public checkBombHit(x: number, y: number, radius: number, damage: number = 1, zoomMultiplier: number = 1): number {
@@ -418,6 +430,16 @@ export class EnemyManager {
       if (enemy.checkCollision(x, y, radius)) {
         const result = enemy.takeDamage(damage, zoomMultiplier)
         totalScore += result.score
+        
+        // 個別にスコア表示を発生させる
+        if (result.score > 0) {
+          this.scene.events.emit('show-score-gain', {
+            x: enemy.x,
+            y: enemy.y,
+            baseScore: enemy.scoreValue,
+            zoomMultiplier: zoomMultiplier
+          })
+        }
         
         if (result.destroyed) {
           this.enemies.splice(i, 1)

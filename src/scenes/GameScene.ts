@@ -37,6 +37,10 @@ export class GameScene extends Phaser.Scene {
   private gameStartMorningTime: string = ''
   private takokongSpawned: boolean = false
   
+  // スクリーンショット管理
+  private screenshots: string[] = []
+  private screenshotTimer: Phaser.Time.TimerEvent | null = null
+  
   // マップ関連
   private mapPanels: MapPanel[][] = []
   private otherHousePositions: { x: number; y: number }[] = []
@@ -75,6 +79,7 @@ export class GameScene extends Phaser.Scene {
     })
     this.startGameTimer()
     this.startClockTimer() // 時刻用の高頻度タイマー開始
+    this.startScreenshotTimer() // スクリーンショット撮影タイマー開始
     this.enemyManager.startSpawning()
   }
 
@@ -288,6 +293,9 @@ export class GameScene extends Phaser.Scene {
     this.events.on('player-damaged', (damage: number) => {
       this.currentScore = Math.max(0, this.currentScore - damage)
       this.updateScoreDisplay()
+      
+      // 家の位置にマイナススコアを表示
+      this.showScoreLossEffect(this.playerHouse.x, this.playerHouse.y, damage)
     })
 
     this.events.on('takokong-defeated', () => {
@@ -458,6 +466,11 @@ export class GameScene extends Phaser.Scene {
         console.log('すべての分身が消失、敵が元の標的に戻りました')
       }
     })
+
+    this.events.on('show-score-gain', (data: { x: number; y: number; baseScore: number; zoomMultiplier: number }) => {
+      // ボム攻撃などで複数敵を同時撃破した時の個別スコア表示
+      this.showScoreGainEffect(data.x, data.y, data.baseScore, data.zoomMultiplier)
+    })
   }
 
   private handleShortTap(pointer: Phaser.Input.Pointer) {
@@ -535,6 +548,9 @@ export class GameScene extends Phaser.Scene {
     if (attackResult.hit) {
       this.currentScore += attackResult.score
       hit = true
+      
+      // スコア表示は EnemyManager の checkAttackHit 内で個別に発生済み
+      // ここでは重複表示を避けるため削除
     }
     
     // タココングへの攻撃（無敵エリア内でなければ）
@@ -542,17 +558,15 @@ export class GameScene extends Phaser.Scene {
       const bossResult = this.takokong.takeDamage(1, zoomMultiplier)
       if (bossResult.score > 0) {
         this.currentScore += bossResult.score
+        
+        // タココング撃破時のスコア表示（基本点10 x ズーム倍率）
+        this.showScoreGainEffect(this.takokong.x, this.takokong.y, 10, zoomMultiplier)
       }
       hit = true
     }
     
     this.updateScoreDisplay()
     this.showAttackEffect(x, y, hit)
-    
-    // ズームボーナス表示
-    if (hit && zoomMultiplier > 1) {
-      this.showZoomBonusEffect(x, y, zoomMultiplier)
-    }
   }
 
   private activateBombJutsu() {
@@ -734,6 +748,142 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
+  private showScoreGainEffect(x: number, y: number, baseScore: number, zoomMultiplier: number) {
+    // 基本点 x ズーム倍率の表示
+    const scoreText = `${baseScore} × ${zoomMultiplier.toFixed(1)}`
+    
+    // ズーム倍率に応じて色を変える
+    let color = '#00ff00' // 緑（等倍）
+    if (zoomMultiplier >= 3) {
+      color = '#ff0000' // 赤（最大ズーム）
+    } else if (zoomMultiplier >= 2.5) {
+      color = '#ff4400' // オレンジレッド（高ズーム）
+    } else if (zoomMultiplier >= 2) {
+      color = '#ffaa00' // オレンジ（中ズーム）
+    } else if (zoomMultiplier > 1) {
+      color = '#ffff00' // 黄色（軽ズーム）
+    }
+    
+    const scoreDisplay = this.add.text(x, y - 40, scoreText, {
+      fontSize: '24px',
+      color: color,
+      fontFamily: 'monospace',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 4,
+      shadow: {
+        offsetX: 2,
+        offsetY: 2,
+        color: '#000000',
+        blur: 2,
+        fill: true
+      }
+    }).setOrigin(0.5)
+    
+    // 枠を追加
+    const padding = 8
+    const bounds = scoreDisplay.getBounds()
+    const frame = this.add.rectangle(
+      bounds.centerX, 
+      bounds.centerY, 
+      bounds.width + padding * 2, 
+      bounds.height + padding * 2, 
+      0x000000, 
+      0.7
+    )
+    frame.setStrokeStyle(3, parseInt(color.replace('#', '0x')))
+    
+    // フレームをテキストの後ろに配置
+    frame.setDepth(scoreDisplay.depth - 1)
+    
+    // スコアテキストアニメーション
+    this.tweens.add({
+      targets: [scoreDisplay, frame],
+      y: y - 100,
+      scaleX: 1.2,
+      scaleY: 1.2,
+      alpha: 0,
+      duration: 1500,
+      ease: 'Power2',
+      onComplete: () => {
+        scoreDisplay.destroy()
+        frame.destroy()
+      }
+    })
+  }
+
+  private showScoreLossEffect(x: number, y: number, damage: number) {
+    // マイナススコアをポップアップ表示
+    const scoreText = `-${damage}`
+    
+    // ダメージ量に応じて色と大きさを変える
+    let color = '#ff4444' // 赤（基本）
+    let fontSize = '24px'
+    if (damage >= 10) {
+      color = '#ff0000' // 強い赤（大ダメージ）
+      fontSize = '28px'
+    } else if (damage >= 5) {
+      color = '#ff2222' // 中赤（中ダメージ）
+      fontSize = '26px'
+    }
+    
+    const scoreDisplay = this.add.text(x, y - 30, scoreText, {
+      fontSize: fontSize,
+      color: color,
+      fontFamily: 'monospace',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 4,
+      shadow: {
+        offsetX: 2,
+        offsetY: 2,
+        color: '#000000',
+        blur: 2,
+        fill: true
+      }
+    }).setOrigin(0.5)
+    
+    // 枠を追加
+    const padding = 8
+    const bounds = scoreDisplay.getBounds()
+    const frame = this.add.rectangle(
+      bounds.centerX, 
+      bounds.centerY, 
+      bounds.width + padding * 2, 
+      bounds.height + padding * 2, 
+      0x000000, 
+      0.7
+    )
+    frame.setStrokeStyle(3, parseInt(color.replace('#', '0x')))
+    
+    // フレームをテキストの後ろに配置
+    frame.setDepth(scoreDisplay.depth - 1)
+    
+    // マイナススコアテキストアニメーション（下に沈んで消える）
+    this.tweens.add({
+      targets: [scoreDisplay, frame],
+      y: y + 100,
+      scaleX: 1.1,
+      scaleY: 1.1,
+      alpha: 0,
+      duration: 1800,
+      ease: 'Power2',
+      onComplete: () => {
+        scoreDisplay.destroy()
+        frame.destroy()
+      }
+    })
+    
+    // 家の軽い点滅エフェクト
+    this.tweens.add({
+      targets: this.playerHouse,
+      alpha: 0.5,
+      duration: 100,
+      yoyo: true,
+      repeat: 2
+    })
+  }
+
   private showBombEffect(x: number, y: number, radius: number) {
     // ボム攻撃エフェクト（指定された半径のまま、拡大なし）
     const effect = this.add.circle(x, y, radius, 0xff4444, 0.6)
@@ -779,6 +929,35 @@ export class GameScene extends Phaser.Scene {
         this.updateMorningTime()
       },
       loop: true
+    })
+  }
+
+  private startScreenshotTimer() {
+    // 60秒ごとに1枚ずつ撮影（合計3枚）
+    this.screenshotTimer = this.time.addEvent({
+      delay: 60000, // 60秒ごと
+      callback: this.takeScreenshot,
+      callbackScope: this,
+      repeat: 2 // 3回実行（0, 1, 2）
+    })
+  }
+
+  private takeScreenshot() {
+    // Phaserのスナップショット機能を使用
+    this.game.renderer.snapshot((image: HTMLImageElement) => {
+      if (image) {
+        // HTMLImageElementからcanvasに描画してbase64に変換
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+        if (ctx && image.src) {
+          canvas.width = image.width
+          canvas.height = image.height
+          ctx.drawImage(image, 0, 0)
+          const dataURL = canvas.toDataURL('image/png')
+          this.screenshots.push(dataURL)
+          console.log(`スクリーンショット ${this.screenshots.length}/3 撮影完了`)
+        }
+      }
     })
   }
 
@@ -853,6 +1032,12 @@ export class GameScene extends Phaser.Scene {
   private endGame() {
     this.gameTimer.remove()
     this.clockTimer.remove()
+    
+    if (this.screenshotTimer) {
+      this.screenshotTimer.remove()
+      this.screenshotTimer = null
+    }
+    
     this.enemyManager.destroy()
     this.cameraController.destroy()
     
@@ -862,7 +1047,8 @@ export class GameScene extends Phaser.Scene {
     
     this.scene.start('EndingScene', { 
       score: this.currentScore,
-      timeSpent: 180 - this.gameTimeRemaining
+      timeSpent: 180 - this.gameTimeRemaining,
+      screenshots: this.screenshots
     })
   }
 
