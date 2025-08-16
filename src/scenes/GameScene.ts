@@ -5,6 +5,8 @@ import { BombJutsu } from '@/entities/BombJutsu'
 import { Takokong } from '@/entities/Takokong'
 import { BOMB_DATA } from '@/utils/config'
 import { BombType } from '@/types'
+import { MapGenerator } from '@/utils/MapGenerator'
+import { MapPanel, PANEL_CONFIG } from '@/types/MapTypes'
 
 export class GameScene extends Phaser.Scene {
   private gameTimer!: Phaser.Time.TimerEvent
@@ -34,6 +36,10 @@ export class GameScene extends Phaser.Scene {
   // ゲーム状態
   private gameStartMorningTime: string = ''
   private takokongSpawned: boolean = false
+  
+  // マップ関連
+  private mapPanels: MapPanel[][] = []
+  private otherHousePositions: { x: number; y: number }[] = []
 
   constructor() {
     super({ key: 'GameScene' })
@@ -112,58 +118,56 @@ export class GameScene extends Phaser.Scene {
     const mapSize = Math.max(width, height) * 1.5
     const graphics = this.add.graphics()
     
+    // 背景色
     graphics.fillStyle(0x004400)
     graphics.fillRect(-mapSize / 2, -mapSize / 2, mapSize, mapSize)
     
+    // マップ生成
     const tileSize = 60
-    const tilesX = Math.ceil(mapSize / tileSize)
-    const tilesY = Math.ceil(mapSize / tileSize)
+    const mapGenerator = new MapGenerator(mapSize, mapSize, tileSize)
+    this.mapPanels = mapGenerator.generateMap()
     
-    // チクタクバンバン風の道路接続システム
-    const tileMap: Array<Array<{ terrainType: number; connections: { north: boolean; south: boolean; east: boolean; west: boolean } }>> = []
-    
-    // 初期化
-    for (let x = 0; x < tilesX; x++) {
-      tileMap[x] = []
-      for (let y = 0; y < tilesY; y++) {
-        const terrainType = Math.floor(Math.random() * 7) // 7種類の地形
-        tileMap[x][y] = {
-          terrainType,
-          connections: { north: false, south: false, east: false, west: false }
-        }
-      }
-    }
-    
-    // 道路接続の生成
-    this.generateRoadConnections(tileMap, tilesX, tilesY)
+    // 他人の家の位置を記録
+    this.otherHousePositions = []
     
     // タイル描画
-    for (let x = 0; x < tilesX; x++) {
-      for (let y = 0; y < tilesY; y++) {
-        const tile = tileMap[x][y]
+    for (let x = 0; x < this.mapPanels.length; x++) {
+      for (let y = 0; y < this.mapPanels[0].length; y++) {
+        const panel = this.mapPanels[x][y]
+        if (!panel) continue
+        
         const tileX = x * tileSize - mapSize / 2
         const tileY = y * tileSize - mapSize / 2
         
-        // 地形色
-        let color: number
-        switch (tile.terrainType) {
-          case 0: color = 0x000088; break // 海
-          case 1: color = 0x0088ff; break // 川
-          case 2: color = 0x008800; break // 田んぼ
-          case 3: color = 0x666666; break // 道路
-          case 4: color = 0x884400; break // 畑
-          case 5: color = 0x444444; break // 駅
-          case 6: color = 0x228822; break // 民家
-          default: color = 0x004400; break
-        }
+        // パネルタイプに応じた色を取得
+        const config = PANEL_CONFIG[panel.type]
+        const color = config.color
+        const alpha = config.alpha
         
-        graphics.fillStyle(color, 0.7)
+        // パネル描画
+        graphics.fillStyle(color, alpha)
         graphics.fillRect(tileX, tileY, tileSize - 2, tileSize - 2)
-        graphics.lineStyle(1, 0xffffff, 0.3)
+        
+        // 枠線
+        if (panel.type === 'player_house') {
+          // 自分の家は強調
+          graphics.lineStyle(2, 0xffffff, 0.8)
+        } else if (panel.type === 'other_house') {
+          // 他人の家も少し強調、位置を記録
+          graphics.lineStyle(2, 0xffaa00, 0.5)
+          this.otherHousePositions.push({
+            x: width / 2 + tileX + tileSize / 2,
+            y: height / 2 + tileY + tileSize / 2
+          })
+        } else {
+          graphics.lineStyle(1, 0xffffff, 0.3)
+        }
         graphics.strokeRect(tileX, tileY, tileSize - 2, tileSize - 2)
         
-        // 道路接続の描画
-        this.drawRoadConnections(graphics, tileX, tileY, tileSize, tile.connections)
+        // 接続の描画（あぜ道と線路のみ）
+        if (panel.type === 'path' || panel.type === 'rail') {
+          this.drawConnections(graphics, tileX, tileY, tileSize, panel.connections, panel.type)
+        }
       }
     }
     
@@ -181,44 +185,15 @@ export class GameScene extends Phaser.Scene {
     // })
   }
 
-  private generateRoadConnections(tileMap: any[][], tilesX: number, tilesY: number) {
-    // 道路・川・鉄道タイプのタイルに接続を生成
-    for (let x = 0; x < tilesX; x++) {
-      for (let y = 0; y < tilesY; y++) {
-        const currentTile = tileMap[x][y]
-        
-        // 道路系タイル（道路、川、駅）の場合、隣接タイルとの接続を確率的に生成
-        if ([1, 3, 5].includes(currentTile.terrainType)) {
-          // 上
-          if (y > 0 && Math.random() > 0.6) {
-            const neighbor = tileMap[x][y - 1]
-            if ([1, 3, 5].includes(neighbor.terrainType)) {
-              currentTile.connections.north = true
-              neighbor.connections.south = true
-            }
-          }
-          
-          // 右
-          if (x < tilesX - 1 && Math.random() > 0.6) {
-            const neighbor = tileMap[x + 1][y]
-            if ([1, 3, 5].includes(neighbor.terrainType)) {
-              currentTile.connections.east = true
-              neighbor.connections.west = true
-            }
-          }
-        }
-      }
-    }
-  }
-
-  private drawRoadConnections(graphics: Phaser.GameObjects.Graphics, tileX: number, tileY: number, tileSize: number, connections: any) {
+  private drawConnections(graphics: Phaser.GameObjects.Graphics, tileX: number, tileY: number, tileSize: number, connections: any, type: string) {
     const centerX = tileX + tileSize / 2
     const centerY = tileY + tileSize / 2
-    const roadWidth = 8
+    const roadWidth = type === 'rail' ? 6 : 8
+    const roadColor = type === 'rail' ? 0x666666 : 0xaa8844
     
-    graphics.lineStyle(roadWidth, 0xaaaaaa, 0.8)
+    graphics.lineStyle(roadWidth, roadColor, 0.8)
     
-    // 道路の描画
+    // 接続線の描画
     if (connections.north) {
       graphics.lineBetween(centerX, centerY, centerX, tileY)
     }
@@ -234,7 +209,7 @@ export class GameScene extends Phaser.Scene {
     
     // 中心の交差点
     if (connections.north || connections.south || connections.east || connections.west) {
-      graphics.fillStyle(0xaaaaaa, 0.8)
+      graphics.fillStyle(roadColor, 0.8)
       graphics.fillCircle(centerX, centerY, roadWidth / 2)
     }
   }
@@ -499,19 +474,38 @@ export class GameScene extends Phaser.Scene {
     const distance = Phaser.Math.Distance.Between(x, y, this.playerHouse.x, this.playerHouse.y)
     return distance < 30
   }
+  
+  private isInOtherHouse(x: number, y: number): boolean {
+    // 他人の家パネル（60x60）の範囲内かチェック
+    for (const house of this.otherHousePositions) {
+      if (Math.abs(x - house.x) < 30 && Math.abs(y - house.y) < 30) {
+        return true
+      }
+    }
+    return false
+  }
 
   private performBeeAttack(x: number, y: number) {
+    // 他人の家パネル内への攻撃は無効
+    if (this.isInOtherHouse(x, y)) {
+      // エフェクトも表示しない
+      return
+    }
+    
     let hit = false
     
     // 通常敵への攻撃（攻撃範囲を80ピクセルに拡大 - 指が隠れる範囲）
-    const attackResult = this.enemyManager.checkAttackHit(x, y, 80)
+    // ただし、他人の家内の敵は除外
+    const attackResult = this.enemyManager.checkAttackHit(x, y, 80, (enemy) => {
+      return !this.isInOtherHouse(enemy.x, enemy.y)
+    })
     if (attackResult.hit) {
       this.currentScore += attackResult.score
       hit = true
     }
     
-    // タココングへの攻撃
-    if (this.takokong && this.takokong.checkCollision(x, y, 40)) {
+    // タココングへの攻撃（他人の家内でなければ）
+    if (this.takokong && this.takokong.checkCollision(x, y, 40) && !this.isInOtherHouse(this.takokong.x, this.takokong.y)) {
       const bossResult = this.takokong.takeDamage(1)
       if (bossResult.score > 0) {
         this.currentScore += bossResult.score

@@ -123,7 +123,7 @@ export class EnemyManager {
     }
   }
 
-  public checkAttackHit(x: number, y: number, radius: number = 15): { hit: boolean; score: number; enemy?: Enemy } {
+  public checkAttackHit(x: number, y: number, radius: number = 15, filter?: (enemy: Enemy) => boolean): { hit: boolean; score: number; enemy?: Enemy } {
     let totalScore = 0
     let hit = false
     let firstEnemy: Enemy | undefined = undefined
@@ -132,6 +132,11 @@ export class EnemyManager {
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const enemy = this.enemies[i]
       if (enemy.checkCollision(x, y, radius)) {
+        // フィルター関数が指定されている場合は、それを適用
+        if (filter && !filter(enemy)) {
+          continue
+        }
+        
         const result = enemy.takeDamage(1)
         totalScore += result.score
         hit = true
