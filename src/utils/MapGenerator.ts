@@ -25,22 +25,22 @@ export class MapGenerator {
     // 1. 自分の家を中央に配置
     this.placePlayerHouse()
     
-    // 2. 駅を配置
-    this.placeStation()
-    
-    // 3. 駅から線路を伸ばす
-    this.generateRailFromStation()
-    
-    // 4. あぜ道を端から自分の家の隣まで生成
-    this.generatePathToHouse()
-    
-    // 5. 水パネルをクラスター生成（自分の家の隣まで）
-    this.generateWaterClustersToHouse()
-    
-    // 6. 他人の家を2つ配置
+    // 2. 他人の家を2つバラけて配置
     this.placeOtherHouses()
     
-    // 7. 残りを田んぼで埋める
+    // 3. 駅を配置
+    this.placeStation()
+    
+    // 4. 駅から線路を伸ばす
+    this.generateRailFromStation()
+    
+    // 5. 残った場所に水辺を配置
+    this.generateWaterClusters()
+    
+    // 6. 残った場所に自宅につながるあぜ道を画面端から2つ配置
+    this.generatePathsToHouse()
+    
+    // 7. 最後に残りを田んぼで埋める
     this.fillWithRiceFields()
     
     return this.mapData as MapPanel[][]
@@ -166,16 +166,28 @@ export class MapGenerator {
     return connections
   }
   
-  private generatePathToHouse() {
+  private generatePathsToHouse() {
+    // 2つのあぜ道を画面端から自宅につなげる
+    for (let i = 0; i < 2; i++) {
+      this.generateSinglePathToHouse()
+    }
+  }
+  
+  private generateSinglePathToHouse() {
     const tilesX = this.mapData.length
     const tilesY = this.mapData[0].length
     const centerX = Math.floor(tilesX / 2)
     const centerY = Math.floor(tilesY / 2)
     
-    // ランダムな端から開始
+    // ランダムな開始端を選択
     const startEdge = Math.floor(Math.random() * 4) // 0:上, 1:右, 2:下, 3:左
+    // 終了端は開始端と異なる端を選択
+    let endEdge
+    do {
+      endEdge = Math.floor(Math.random() * 4)
+    } while (endEdge === startEdge)
     
-    let startX, startY
+    let startX, startY, endX, endY
     
     // 開始位置（端）
     switch (startEdge) {
@@ -195,27 +207,73 @@ export class MapGenerator {
         startX = 0
         startY = Math.floor(Math.random() * tilesY)
         break
+      default:
+        startX = 0
+        startY = 0
     }
     
-    // 自分の家の隣接位置をランダムに選択
-    const houseAdjacentPositions = [
-      { x: centerX, y: centerY - 1 }, // 北
-      { x: centerX + 1, y: centerY }, // 東
-      { x: centerX, y: centerY + 1 }, // 南
-      { x: centerX - 1, y: centerY }  // 西
-    ]
-    const endPos = houseAdjacentPositions[Math.floor(Math.random() * 4)]
+    // 終了位置（反対端）
+    switch (endEdge) {
+      case 0: // 上端
+        endX = Math.floor(Math.random() * tilesX)
+        endY = 0
+        break
+      case 1: // 右端
+        endX = tilesX - 1
+        endY = Math.floor(Math.random() * tilesY)
+        break
+      case 2: // 下端
+        endX = Math.floor(Math.random() * tilesX)
+        endY = tilesY - 1
+        break
+      case 3: // 左端
+        endX = 0
+        endY = Math.floor(Math.random() * tilesY)
+        break
+      default:
+        endX = tilesX - 1
+        endY = tilesY - 1
+    }
     
-    // 端から家の隣まで経路作成
-    this.createPathBetween(startX!, startY!, endPos.x, endPos.y)
+    // 端から端まで、自宅横を通過する経路作成
+    this.createPathThroughHouse(startX!, startY!, endX!, endY!, centerX, centerY)
   }
   
-  private createPathBetween(startX: number, startY: number, endX: number, endY: number) {
-    let currentX = startX
-    let currentY = startY
-    const visited = new Set<string>()
+  private createPathThroughHouse(startX: number, startY: number, endX: number, endY: number, centerX: number, centerY: number) {
+    // 家を通過する3ポイントルート：開始点 → 家付近 → 終了点
+    const houseApproachDistance = 2 // 家から2マス離れた位置を通過
     
-    while (currentX !== endX || currentY !== endY) {
+    // 家の周辺で通過するポイントを計算
+    const houseX = centerX + (Math.random() - 0.5) * 4 // 家の±2マス範囲
+    const houseY = centerY + (Math.random() - 0.5) * 4
+    
+    // 開始点から家付近まで
+    this.createPathBetween(startX, startY, houseX, houseY)
+    
+    // 家付近から終了点まで
+    this.createPathBetween(houseX, houseY, endX, endY)
+  }
+
+  private createPathBetween(startX: number, startY: number, endX: number, endY: number) {
+    // 座標を整数に変換し、境界内に制限
+    let currentX = Math.floor(Math.max(0, Math.min(this.mapData.length - 1, startX)))
+    let currentY = Math.floor(Math.max(0, Math.min(this.mapData[0].length - 1, startY)))
+    endX = Math.floor(Math.max(0, Math.min(this.mapData.length - 1, endX)))
+    endY = Math.floor(Math.max(0, Math.min(this.mapData[0].length - 1, endY)))
+    
+    const visited = new Set<string>()
+    const maxIterations = 1000 // 無限ループ防止
+    let iterations = 0
+    
+    while ((currentX !== endX || currentY !== endY) && iterations < maxIterations) {
+      iterations++
+      
+      // 境界チェック
+      if (currentX < 0 || currentX >= this.mapData.length || 
+          currentY < 0 || currentY >= this.mapData[0].length) {
+        break
+      }
+      
       // 現在位置をあぜ道に設定
       if (this.mapData[currentX][currentY] === null) {
         this.mapData[currentX][currentY] = {
@@ -258,8 +316,10 @@ export class MapGenerator {
       }
     }
     
-    // 最終地点もあぜ道に
-    if (this.mapData[endX][endY] === null) {
+    // 最終地点もあぜ道に（境界チェック付き）
+    if (endX >= 0 && endX < this.mapData.length && 
+        endY >= 0 && endY < this.mapData[0].length &&
+        this.mapData[endX][endY] === null) {
       this.mapData[endX][endY] = {
         x: endX,
         y: endY,
@@ -295,133 +355,13 @@ export class MapGenerator {
     }
   }
   
-  private generateWaterClustersToHouse() {
+  private generateWaterClusters() {
     const tilesX = this.mapData.length
     const tilesY = this.mapData[0].length
-    const centerX = Math.floor(tilesX / 2)
-    const centerY = Math.floor(tilesY / 2)
-    
-    // 端から開始する水の流れを作成
-    const waterEdge = Math.floor(Math.random() * 4) // 0:上, 1:右, 2:下, 3:左
-    
-    let startX, startY
-    
-    // 水の開始位置（端）
-    switch (waterEdge) {
-      case 0: // 上端
-        startX = Math.floor(Math.random() * tilesX)
-        startY = 0
-        break
-      case 1: // 右端
-        startX = tilesX - 1
-        startY = Math.floor(Math.random() * tilesY)
-        break
-      case 2: // 下端
-        startX = Math.floor(Math.random() * tilesX)
-        startY = tilesY - 1
-        break
-      case 3: // 左端
-        startX = 0
-        startY = Math.floor(Math.random() * tilesY)
-        break
-    }
-    
-    // 自分の家の隣接位置をランダムに選択（あぜ道と被らないように）
-    const houseAdjacentPositions = [
-      { x: centerX, y: centerY - 1 }, // 北
-      { x: centerX + 1, y: centerY }, // 東
-      { x: centerX, y: centerY + 1 }, // 南
-      { x: centerX - 1, y: centerY }  // 西
-    ]
-    
-    // あぜ道と被らない位置を選択
-    let waterEndPos
-    for (const pos of houseAdjacentPositions) {
-      if (this.mapData[pos.x] && this.mapData[pos.x][pos.y] && 
-          this.mapData[pos.x][pos.y]!.type !== 'path') {
-        waterEndPos = pos
-        break
-      }
-    }
-    
-    // もし全部あぜ道だった場合は別の隣接位置を使用
-    if (!waterEndPos) {
-      waterEndPos = houseAdjacentPositions[Math.floor(Math.random() * 4)]
-    }
-    
-    // 端から家の隣まで水の流れ作成
-    this.createWaterPathBetween(startX!, startY!, waterEndPos.x, waterEndPos.y)
-    
-    // 追加の水クラスターも生成
-    this.generateAdditionalWaterClusters()
-  }
-  
-  private createWaterPathBetween(startX: number, startY: number, endX: number, endY: number) {
-    let currentX = startX
-    let currentY = startY
-    const visited = new Set<string>()
-    
-    while (currentX !== endX || currentY !== endY) {
-      // 現在位置を水に設定
-      if (this.mapData[currentX][currentY] === null) {
-        this.mapData[currentX][currentY] = {
-          x: currentX,
-          y: currentY,
-          type: 'water',
-          connections: { north: false, south: false, east: false, west: false }
-        }
-      }
-      
-      visited.add(`${currentX},${currentY}`)
-      
-      // 次の移動方向を決定（目的地に向かって）
-      const dx = endX - currentX
-      const dy = endY - currentY
-      
-      // ランダム性を加えつつ目的地へ向かう
-      if (Math.random() < 0.8) {
-        if (Math.abs(dx) > Math.abs(dy)) {
-          currentX += Math.sign(dx)
-        } else {
-          currentY += Math.sign(dy)
-        }
-      } else {
-        // 20%の確率でランダムな方向へ
-        if (Math.random() < 0.5 && dx !== 0) {
-          currentX += Math.sign(dx)
-        } else if (dy !== 0) {
-          currentY += Math.sign(dy)
-        }
-      }
-      
-      // 境界チェック
-      currentX = Math.max(0, Math.min(this.mapData.length - 1, currentX))
-      currentY = Math.max(0, Math.min(this.mapData[0].length - 1, currentY))
-      
-      // 無限ループ防止
-      if (visited.has(`${currentX},${currentY}`)) {
-        break
-      }
-    }
-    
-    // 最終地点も水に
-    if (this.mapData[endX][endY] === null) {
-      this.mapData[endX][endY] = {
-        x: endX,
-        y: endY,
-        type: 'water',
-        connections: { north: false, south: false, east: false, west: false }
-      }
-    }
-  }
-  
-  private generateAdditionalWaterClusters() {
-    const tilesX = this.mapData.length
-    const tilesY = this.mapData[0].length
-    const waterCount = Math.floor(tilesX * tilesY * PANEL_CONFIG.water.frequency * 0.3) // 少なめに
+    const waterCount = Math.floor(tilesX * tilesY * PANEL_CONFIG.water.frequency)
     
     let placed = 0
-    const maxAttempts = 50
+    const maxAttempts = 100
     let attempts = 0
     
     while (placed < waterCount && attempts < maxAttempts) {
@@ -433,8 +373,10 @@ export class MapGenerator {
       
       if (this.mapData[startX][startY] !== null) continue
       
-      // 小さなクラスターサイズ
-      const clusterSize = Math.floor(Math.random() * 3) + 2 // 2-4個
+      // クラスターサイズ
+      const clusterSize = Math.floor(Math.random() * 
+        (PANEL_CONFIG.water.clusterMax - PANEL_CONFIG.water.clusterMin + 1)) + 
+        PANEL_CONFIG.water.clusterMin
       
       // クラスター生成
       const cluster: [number, number][] = [[startX, startY]]
@@ -476,6 +418,7 @@ export class MapGenerator {
     // 水パネルの接続を更新
     this.updateWaterConnections()
   }
+  
   
   private updateWaterConnections() {
     for (let x = 0; x < this.mapData.length; x++) {

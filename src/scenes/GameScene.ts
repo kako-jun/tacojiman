@@ -115,8 +115,9 @@ export class GameScene extends Phaser.Scene {
     const mapContainer = this.add.container(width / 2, height / 2)
     mapContainer.setDepth(0) // 最背面に設定
     
-    // マップを大きめに生成（回転時に端が見えないように）
-    const mapSize = Math.max(width, height) * 1.5
+    // 正方形ベースのマップサイズ（回転時に余白が見えないよう少し大きめ）
+    const baseSize = Math.max(width, height) // 縦横の大きい方を基準
+    const mapSize = baseSize * 1.4 // 正方形を1.4倍に拡大して回転対応
     const graphics = this.add.graphics()
     
     // 背景色

@@ -151,19 +151,28 @@ export class Takokong extends Phaser.GameObjects.Container {
   }
 
   private performAttack() {
+    // シーンが有効かチェック
+    if (!this.scene || !this.scene.sys || !this.scene.sys.isActive()) {
+      return
+    }
+    
     // プレイヤーにダメージイベント発火
-    this.scene.events.emit('player-damaged', 5)
+    if (this.scene.events) {
+      this.scene.events.emit('player-damaged', 5)
+    }
     
     // 攻撃エフェクト
-    const attackEffect = this.scene.add.circle(this.x, this.y, 40, 0xff0044, 0.7)
-    this.scene.tweens.add({
-      targets: attackEffect,
-      scaleX: 2,
-      scaleY: 2,
-      alpha: 0,
-      duration: 400,
-      onComplete: () => attackEffect.destroy()
-    })
+    if (this.scene.add && this.scene.tweens) {
+      const attackEffect = this.scene.add.circle(this.x, this.y, 40, 0xff0044, 0.7)
+      this.scene.tweens.add({
+        targets: attackEffect,
+        scaleX: 2,
+        scaleY: 2,
+        alpha: 0,
+        duration: 400,
+        onComplete: () => attackEffect.destroy()
+      })
+    }
   }
 
   public takeDamage(damage: number = 1): { destroyed: boolean; score: number } {
@@ -231,41 +240,61 @@ export class Takokong extends Phaser.GameObjects.Container {
   }
 
   private showDamageEffect() {
+    // シーンが有効かチェック
+    if (!this.scene || !this.scene.sys || !this.scene.sys.isActive()) {
+      return
+    }
+    
     // 強烈な点滅エフェクト
-    this.scene.tweens.add({
-      targets: this.sprite,
-      alpha: 0.2,
-      duration: 100,
-      yoyo: true,
-      repeat: 2
-    })
+    if (this.scene.tweens && this.sprite) {
+      this.scene.tweens.add({
+        targets: this.sprite,
+        alpha: 0.2,
+        duration: 100,
+        yoyo: true,
+        repeat: 2
+      })
+    }
     
     // ヒットストップ
     if (this.moveTween) {
       this.moveTween.pause()
-      this.scene.time.delayedCall(100, () => {
-        if (this.moveTween) {
-          this.moveTween.resume()
-        }
-      })
+      if (this.scene.time) {
+        this.scene.time.delayedCall(100, () => {
+          if (this.moveTween) {
+            this.moveTween.resume()
+          }
+        })
+      }
     }
     
     // カメラシェイク
-    this.scene.cameras.main.shake(200, 5)
+    if (this.scene.cameras && this.scene.cameras.main) {
+      this.scene.cameras.main.shake(200, 5)
+    }
   }
   
   private showBarrierHitEffect() {
+    // シーンが有効かチェック
+    if (!this.scene || !this.scene.sys || !this.scene.sys.isActive()) {
+      return
+    }
+    
     // バリアへの攻撃エフェクト（軽い点滅）
-    this.scene.tweens.add({
-      targets: this.barrierEffect,
-      alpha: 0.8,
-      duration: 50,
-      yoyo: true,
-      repeat: 1
-    })
+    if (this.scene.tweens && this.barrierEffect) {
+      this.scene.tweens.add({
+        targets: this.barrierEffect,
+        alpha: 0.8,
+        duration: 50,
+        yoyo: true,
+        repeat: 1
+      })
+    }
     
     // 軽いカメラシェイク
-    this.scene.cameras.main.shake(100, 2)
+    if (this.scene.cameras && this.scene.cameras.main) {
+      this.scene.cameras.main.shake(100, 2)
+    }
   }
 
   private updateDisplay() {
