@@ -106,12 +106,15 @@ export class MapGenerator {
     
     if (stationX < 0) return
     
-    // ランダムな方向に線路を伸ばす
+    // 蛸島駅は終点なので、1つの方向にのみ線路を伸ばす
     const direction = Math.floor(Math.random() * 4) // 0:北, 1:東, 2:南, 3:西
-    const length = Math.floor(Math.random() * 4) + 3 // 3-6マス
+    const length = Math.floor(Math.random() * 5) + 4 // 4-8マス（終点らしく長めに）
     
     const dx = [0, 1, 0, -1][direction]
     const dy = [-1, 0, 1, 0][direction]
+    
+    let lastValidX = stationX
+    let lastValidY = stationY
     
     for (let i = 1; i <= length; i++) {
       const railX = stationX + dx * i
@@ -125,12 +128,14 @@ export class MapGenerator {
           x: railX,
           y: railY,
           type: 'rail',
-          connections: this.calculateRailConnections(railX, railY, dx, dy)
+          connections: this.calculateTerminalRailConnections(railX, railY, dx, dy, i, length)
         }
         
-        // 前のパネルとの接続を更新
+        lastValidX = railX
+        lastValidY = railY
+        
+        // 駅との接続（最初のレールのみ）
         if (i === 1) {
-          // 駅との接続
           const station = this.mapData[stationX][stationY]!
           if (dx === 1) station.connections.east = true
           if (dx === -1) station.connections.west = true
@@ -141,6 +146,32 @@ export class MapGenerator {
         break
       }
     }
+  }
+  
+  private calculateTerminalRailConnections(x: number, y: number, dx: number, dy: number, currentIndex: number, totalLength: number): PanelConnections {
+    const connections: PanelConnections = {
+      north: false,
+      south: false,
+      east: false,
+      west: false
+    }
+    
+    // 駅方向への接続（常にあり）
+    if (dx === 1) connections.west = true
+    if (dx === -1) connections.east = true
+    if (dy === 1) connections.north = true
+    if (dy === -1) connections.south = true
+    
+    // 終点以外は進行方向にも接続
+    if (currentIndex < totalLength) {
+      if (dx === 1) connections.east = true
+      if (dx === -1) connections.west = true
+      if (dy === 1) connections.south = true
+      if (dy === -1) connections.north = true
+    }
+    // 終点の場合は片方向のみの接続（駅方向のみ）
+    
+    return connections
   }
   
   private calculateRailConnections(x: number, y: number, dx: number, dy: number): PanelConnections {
@@ -167,8 +198,8 @@ export class MapGenerator {
   }
   
   private generatePathsToHouse() {
-    // 2つのあぜ道を画面端から自宅につなげる
-    for (let i = 0; i < 2; i++) {
+    // 4つのあぜ道を画面端から自宅につなげる（より多く）
+    for (let i = 0; i < 4; i++) {
       this.generateSinglePathToHouse()
     }
   }
@@ -356,67 +387,264 @@ export class MapGenerator {
   }
   
   private generateWaterClusters() {
+    // 蛸島は海と川のみ（池なし）
+    // 1. 端から海を生成
+    this.generateSeaFromEdge()
+    // 2. 海から川を内陸に向けて生成
+    this.generateRiversFromSea()
+    
+    // 水パネルの接続を更新
+    this.updateWaterConnections()
+  }
+  
+  private generateSeaFromEdge() {
     const tilesX = this.mapData.length
     const tilesY = this.mapData[0].length
-    const waterCount = Math.floor(tilesX * tilesY * PANEL_CONFIG.water.frequency)
     
-    let placed = 0
-    const maxAttempts = 100
-    let attempts = 0
+    // ランダムな端を選択（海はマップの端から始まる）
+    const seaEdge = Math.floor(Math.random() * 4) // 0:上, 1:右, 2:下, 3:左
+    const seaLength = Math.floor(Math.random() * 12) + 8 // 海岸線の長さを増加（8-19）
     
-    while (placed < waterCount && attempts < maxAttempts) {
-      attempts++
+    let startPositions: { x: number; y: number }[] = []
+    
+    // 海岸線の開始位置を生成
+    switch (seaEdge) {
+      case 0: // 上端
+        for (let i = 0; i < seaLength; i++) {
+          const x = Math.floor(Math.random() * tilesX)
+          startPositions.push({ x, y: 0 })
+        }
+        break
+      case 1: // 右端
+        for (let i = 0; i < seaLength; i++) {
+          const y = Math.floor(Math.random() * tilesY)
+          startPositions.push({ x: tilesX - 1, y })
+        }
+        break
+      case 2: // 下端
+        for (let i = 0; i < seaLength; i++) {
+          const x = Math.floor(Math.random() * tilesX)
+          startPositions.push({ x, y: tilesY - 1 })
+        }
+        break
+      case 3: // 左端
+        for (let i = 0; i < seaLength; i++) {
+          const y = Math.floor(Math.random() * tilesY)
+          startPositions.push({ x: 0, y })
+        }
+        break
+    }
+    
+    // 海岸線から内陸に2-3マス海を広げる
+    for (const startPos of startPositions) {
+      this.expandSeaInland(startPos.x, startPos.y, seaEdge)
+    }
+  }
+  
+  private expandSeaInland(startX: number, startY: number, direction: number) {
+    const tilesX = this.mapData.length
+    const tilesY = this.mapData[0].length
+    const centerX = Math.floor(tilesX / 2)
+    const centerY = Math.floor(tilesY / 2)
+    
+    // 中心までの距離に応じて海の深度を決定（中心に近いほど深く）
+    const distanceToCenter = Math.max(
+      Math.abs(startX - centerX), 
+      Math.abs(startY - centerY)
+    )
+    const maxDepth = Math.max(5, Math.floor(distanceToCenter * 0.6)) // より深く侵入
+    const inlandDepth = Math.floor(Math.random() * 4) + 3 // 3-6マス内陸（より深く）
+    const actualDepth = Math.min(inlandDepth, maxDepth)
+    
+    // 内陸方向のベクトル
+    const inlandDx = [0, -1, 0, 1][direction] // 上->下, 右->左, 下->上, 左->右
+    const inlandDy = [1, 0, -1, 0][direction]
+    
+    for (let depth = 0; depth < actualDepth; depth++) {
+      const seaX = startX + inlandDx * depth
+      const seaY = startY + inlandDy * depth
       
-      // ランダムな開始位置
-      const startX = Math.floor(Math.random() * tilesX)
-      const startY = Math.floor(Math.random() * tilesY)
-      
-      if (this.mapData[startX][startY] !== null) continue
-      
-      // クラスターサイズ
-      const clusterSize = Math.floor(Math.random() * 
-        (PANEL_CONFIG.water.clusterMax - PANEL_CONFIG.water.clusterMin + 1)) + 
-        PANEL_CONFIG.water.clusterMin
-      
-      // クラスター生成
-      const cluster: [number, number][] = [[startX, startY]]
-      this.mapData[startX][startY] = {
-        x: startX,
-        y: startY,
-        type: 'water',
-        connections: { north: false, south: false, east: false, west: false }
+      if (seaX >= 0 && seaX < tilesX && seaY >= 0 && seaY < tilesY &&
+          this.mapData[seaX][seaY] === null) {
+        this.mapData[seaX][seaY] = {
+          x: seaX,
+          y: seaY,
+          type: 'water',
+          connections: { north: false, south: false, east: false, west: false }
+        }
       }
-      placed++
-      
-      // 隣接セルに広げる
-      for (let i = 1; i < clusterSize && placed < waterCount; i++) {
-        const [prevX, prevY] = cluster[cluster.length - 1]
-        const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]]
-        
-        // ランダムな方向を試す
-        for (let j = 0; j < directions.length; j++) {
-          const dir = directions[Math.floor(Math.random() * directions.length)]
-          const newX = prevX + dir[0]
-          const newY = prevY + dir[1]
-          
-          if (newX >= 0 && newX < tilesX && newY >= 0 && newY < tilesY &&
-              this.mapData[newX][newY] === null) {
-            this.mapData[newX][newY] = {
-              x: newX,
-              y: newY,
-              type: 'water',
-              connections: { north: false, south: false, east: false, west: false }
-            }
-            cluster.push([newX, newY])
-            placed++
-            break
-          }
+    }
+  }
+  
+  private generateRiversFromSea() {
+    const tilesX = this.mapData.length
+    const tilesY = this.mapData[0].length
+    const centerX = Math.floor(tilesX / 2)
+    const centerY = Math.floor(tilesY / 2)
+    
+    // 海パネルを探す
+    const seaPanels: { x: number; y: number }[] = []
+    for (let x = 0; x < tilesX; x++) {
+      for (let y = 0; y < tilesY; y++) {
+        if (this.mapData[x][y]?.type === 'water') {
+          seaPanels.push({ x, y })
         }
       }
     }
     
-    // 水パネルの接続を更新
-    this.updateWaterConnections()
+    if (seaPanels.length === 0) return
+    
+    // 1本目の川は必ず自宅横まで到達させる
+    const startSea = seaPanels[Math.floor(Math.random() * seaPanels.length)]
+    this.createRiverToHouse(startSea.x, startSea.y, centerX, centerY)
+    
+    // 追加で1本の川をランダムに生成
+    if (seaPanels.length > 0) {
+      const additionalSea = seaPanels[Math.floor(Math.random() * seaPanels.length)]
+      this.createRiverFromSea(additionalSea.x, additionalSea.y)
+    }
+  }
+  
+  private createRiverToHouse(startX: number, startY: number, houseX: number, houseY: number) {
+    // 自宅の隣接位置をランダムに選択
+    const houseAdjacentPositions = [
+      { x: houseX, y: houseY - 1 }, // 北
+      { x: houseX + 1, y: houseY }, // 東
+      { x: houseX, y: houseY + 1 }, // 南
+      { x: houseX - 1, y: houseY }  // 西
+    ]
+    
+    // あぜ道と被らない位置を選択
+    let riverEndPos = houseAdjacentPositions[0] // デフォルト
+    for (const pos of houseAdjacentPositions) {
+      if (pos.x >= 0 && pos.x < this.mapData.length &&
+          pos.y >= 0 && pos.y < this.mapData[0].length &&
+          this.mapData[pos.x][pos.y] === null) {
+        riverEndPos = pos
+        break
+      }
+    }
+    
+    // 海から自宅横まで川を作成
+    this.createWaterPathBetween(startX, startY, riverEndPos.x, riverEndPos.y)
+  }
+  
+  private createWaterPathBetween(startX: number, startY: number, endX: number, endY: number) {
+    let currentX = startX
+    let currentY = startY
+    const visited = new Set<string>()
+    const maxIterations = 100
+    let iterations = 0
+    
+    while ((currentX !== endX || currentY !== endY) && iterations < maxIterations) {
+      iterations++
+      visited.add(`${currentX},${currentY}`)
+      
+      // 既に水パネルでない場合のみ配置
+      if (this.mapData[currentX][currentY] === null) {
+        this.mapData[currentX][currentY] = {
+          x: currentX,
+          y: currentY,
+          type: 'water',
+          connections: { north: false, south: false, east: false, west: false }
+        }
+      }
+      
+      // 次の移動方向を決定（目的地に向かって）
+      const dx = endX - currentX
+      const dy = endY - currentY
+      
+      // 目的地へ向かう優先度70%、ランダム30%
+      if (Math.random() < 0.7) {
+        if (Math.abs(dx) > Math.abs(dy)) {
+          currentX += Math.sign(dx)
+        } else {
+          currentY += Math.sign(dy)
+        }
+      } else {
+        // 30%の確率でランダムな方向へ（蛇行効果）
+        if (Math.random() < 0.5 && dx !== 0) {
+          currentX += Math.sign(dx)
+        } else if (dy !== 0) {
+          currentY += Math.sign(dy)
+        }
+      }
+      
+      // 境界チェック
+      currentX = Math.max(0, Math.min(this.mapData.length - 1, currentX))
+      currentY = Math.max(0, Math.min(this.mapData[0].length - 1, currentY))
+      
+      // 無限ループ防止
+      if (visited.has(`${currentX},${currentY}`)) {
+        // 別のルートを試す
+        const directions = [
+          { dx: 0, dy: -1 }, { dx: 1, dy: 0 }, 
+          { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+        ]
+        const randomDir = directions[Math.floor(Math.random() * directions.length)]
+        currentX = Math.max(0, Math.min(this.mapData.length - 1, currentX + randomDir.dx))
+        currentY = Math.max(0, Math.min(this.mapData[0].length - 1, currentY + randomDir.dy))
+      }
+    }
+    
+    // 最終地点も水に
+    if (endX >= 0 && endX < this.mapData.length && 
+        endY >= 0 && endY < this.mapData[0].length &&
+        this.mapData[endX][endY] === null) {
+      this.mapData[endX][endY] = {
+        x: endX,
+        y: endY,
+        type: 'water',
+        connections: { north: false, south: false, east: false, west: false }
+      }
+    }
+  }
+
+  private createRiverFromSea(startX: number, startY: number) {
+    const tilesX = this.mapData.length
+    const tilesY = this.mapData[0].length
+    const riverLength = Math.floor(Math.random() * 6) + 4 // 4-9マスの川
+    
+    let currentX = startX
+    let currentY = startY
+    const visited = new Set<string>()
+    
+    for (let i = 0; i < riverLength; i++) {
+      visited.add(`${currentX},${currentY}`)
+      
+      // 次の位置を内陸方向に向けて選択
+      const directions = [
+        { dx: 0, dy: -1 }, // 北
+        { dx: 1, dy: 0 },  // 東
+        { dx: 0, dy: 1 },  // 南
+        { dx: -1, dy: 0 }  // 西
+      ]
+      
+      // 利用可能な方向をフィルタ
+      const validDirections = directions.filter(dir => {
+        const newX = currentX + dir.dx
+        const newY = currentY + dir.dy
+        return newX >= 0 && newX < tilesX && 
+               newY >= 0 && newY < tilesY &&
+               this.mapData[newX][newY] === null &&
+               !visited.has(`${newX},${newY}`)
+      })
+      
+      if (validDirections.length === 0) break
+      
+      // ランダムな方向を選択
+      const chosenDir = validDirections[Math.floor(Math.random() * validDirections.length)]
+      currentX += chosenDir.dx
+      currentY += chosenDir.dy
+      
+      // 川パネルを配置
+      this.mapData[currentX][currentY] = {
+        x: currentX,
+        y: currentY,
+        type: 'water',
+        connections: { north: false, south: false, east: false, west: false }
+      }
+    }
   }
   
   

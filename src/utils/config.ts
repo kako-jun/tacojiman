@@ -69,7 +69,7 @@ export const ENEMY_DATA = [
   EnemyDataSchema.parse({
     type: 'ground',
     hp: 2,
-    speed: 1.0,
+    speed: 1.2, // 地上タコ：標準的な速度
     score: 1,
     spawnRoute: 'road',
     color: { hp2: '#FF4444', hp1: '#FF8888' }
@@ -77,7 +77,7 @@ export const ENEMY_DATA = [
   EnemyDataSchema.parse({
     type: 'water',
     hp: 2,
-    speed: 0.8,
+    speed: 0.8, // 水タコ：遅め（川を遡上）
     score: 2,
     spawnRoute: 'river',
     color: { hp2: '#FF4444', hp1: '#FF8888' }
@@ -85,7 +85,7 @@ export const ENEMY_DATA = [
   EnemyDataSchema.parse({
     type: 'air',
     hp: 2,
-    speed: 1.5,
+    speed: 1.8, // 空タコ：最も早い（空を飛ぶ）
     score: 3,
     spawnRoute: 'sky',
     color: { hp2: '#FF4444', hp1: '#FF8888' }
@@ -93,7 +93,7 @@ export const ENEMY_DATA = [
   EnemyDataSchema.parse({
     type: 'underground',
     hp: 2,
-    speed: 0.5,
+    speed: 0.4, // 地下タコ：最も遅い（地面を掘る）
     score: 4,
     spawnRoute: 'underground',
     color: { hp2: '#FF4444', hp1: '#FF8888' }

@@ -27,9 +27,21 @@ export class EnemyManager {
   }
 
   public startSpawning() {
+    // 開始直後に地上タコを3匹出現させる
+    this.spawnInitialGroundEnemies()
+    
+    // 初期出現頻度は0.5秒ごと（非常に高頻度で開始）
     this.spawnTimer = this.scene.time.addEvent({
-      delay: 2000, // 2秒ごと
+      delay: 500, // 0.5秒ごと
       callback: this.spawnRandomEnemy,
+      callbackScope: this,
+      loop: true
+    })
+    
+    // 15秒ごとに出現頻度を上げる（ゲーム内2.5分相当）
+    this.scene.time.addEvent({
+      delay: 15000, // 15秒ごと
+      callback: this.increaseSpawnRate,
       callbackScope: this,
       loop: true
     })
@@ -50,8 +62,129 @@ export class EnemyManager {
     }
   }
 
+  private spawnInitialGroundEnemies() {
+    // 開始直後に地上タコを3匹、家に近い位置に配置
+    for (let i = 0; i < 3; i++) {
+      this.scene.time.delayedCall(i * 200, () => {
+        this.spawnSpecificEnemy('ground', true) // 近距離フラグ
+      })
+    }
+  }
+
+  private spawnSpecificEnemy(enemyType: EnemyType, nearHouse: boolean = false) {
+    const enemyData = ENEMY_DATA.find(data => data.type === enemyType)
+    if (!enemyData) return
+
+    let spawnPos: { x: number; y: number }
+    
+    if (nearHouse) {
+      // 家に近い位置から出現（画面に見える範囲）
+      spawnPos = this.getNearHouseSpawnPosition(enemyType)
+    } else {
+      // 通常の出現位置
+      spawnPos = this.getSpawnPosition(enemyType)
+    }
+    
+    const enemy = new Enemy(
+      this.scene,
+      spawnPos.x,
+      spawnPos.y,
+      enemyData,
+      this.playerHouseX,
+      this.playerHouseY,
+      this.mapPanels
+    )
+
+    this.enemies.push(enemy)
+    
+    // 分身が存在する場合は新しい敵も誘導
+    if (this.decoyTargets.size > 0) {
+      this.updateSingleEnemyTarget(enemy)
+    }
+  }
+
+  private getNearHouseSpawnPosition(enemyType: EnemyType): { x: number; y: number } {
+    const tileSize = 30
+    const centerTileX = Math.floor(this.mapPanels.length / 2)
+    const centerTileY = Math.floor(this.mapPanels[0].length / 2)
+    
+    // 家から3-6マス離れた位置を探す（画面内に見える範囲）
+    const searchRadius = 6
+    const minRadius = 3
+    
+    for (let attempts = 0; attempts < 50; attempts++) {
+      const angle = Math.random() * Math.PI * 2
+      const distance = minRadius + Math.random() * (searchRadius - minRadius)
+      
+      const tileX = Math.floor(centerTileX + Math.cos(angle) * distance)
+      const tileY = Math.floor(centerTileY + Math.sin(angle) * distance)
+      
+      // 境界チェック
+      if (tileX < 0 || tileX >= this.mapPanels.length ||
+          tileY < 0 || tileY >= this.mapPanels[0].length) {
+        continue
+      }
+      
+      const panel = this.mapPanels[tileX][tileY]
+      if (!panel) continue
+      
+      // 敵タイプに応じた移動可能パネルをチェック
+      let canSpawn = false
+      switch (enemyType) {
+        case 'ground':
+          canSpawn = panel.type === 'path' || panel.type === 'rail'
+          break
+        case 'water':
+          canSpawn = panel.type === 'water'
+          break
+        case 'underground':
+          canSpawn = panel.type === 'rice_field' || panel.type === 'path'
+          break
+        case 'air':
+          canSpawn = true
+          break
+      }
+      
+      if (canSpawn) {
+        const worldX = this.mapWidth / 2 + (tileX - centerTileX) * tileSize
+        const worldY = this.mapHeight / 2 + (tileY - centerTileY) * tileSize
+        return { x: worldX, y: worldY }
+      }
+    }
+    
+    // 見つからない場合は通常の出現位置
+    return this.getSpawnPosition(enemyType)
+  }
+
+  private increaseSpawnRate() {
+    if (!this.spawnTimer) return
+
+    // 現在の間隔を取得
+    const currentDelay = this.spawnTimer.delay
+    
+    // 出現頻度を20%上げる（間隔を短くする）
+    const newDelay = Math.max(200, currentDelay * 0.8) // 最低200msまで短縮
+    
+    console.log(`敵出現頻度アップ: ${currentDelay}ms → ${newDelay}ms`)
+    
+    // 古いタイマーを削除
+    this.spawnTimer.remove()
+    
+    // 新しい間隔でタイマーを再作成
+    this.spawnTimer = this.scene.time.addEvent({
+      delay: newDelay,
+      callback: this.spawnRandomEnemy,
+      callbackScope: this,
+      loop: true
+    })
+  }
+
   private spawnRandomEnemy() {
-    if (this.enemies.length >= 50) return // 最大50匹制限
+    // 時間経過とともに最大敵数も増加（初期40匹→最大70匹）
+    const gameTime = this.scene.time.now / 1000 // 秒単位
+    const maxEnemies = Math.min(70, 40 + Math.floor(gameTime / 15) * 5) // 15秒ごとに5匹増加
+    
+    if (this.enemies.length >= maxEnemies) return
 
     const enemyType = this.getRandomEnemyType()
     const enemyData = ENEMY_DATA.find(data => data.type === enemyType)
@@ -79,7 +212,7 @@ export class EnemyManager {
 
   private getRandomEnemyType(): EnemyType {
     const types: EnemyType[] = ['ground', 'water', 'air', 'underground']
-    const weights = [0.3, 0.25, 0.25, 0.2] // 道路歩行型が最も多い
+    const weights = [0.5, 0.25, 0.15, 0.1] // 地上タコ50%、水タコ25%、空タコ15%、地下タコ10%
     
     const random = Math.random()
     let cumulativeWeight = 0

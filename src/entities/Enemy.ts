@@ -114,8 +114,19 @@ export class Enemy extends Phaser.GameObjects.Container {
       return
     }
 
+    // パネル制限に応じた移動
+    if (this.enemyType === 'air') {
+      // 空タコは制限なし（直線移動）
+      this.startDirectMovement()
+    } else {
+      // 地上、水、地下タコはパネルを辿って移動
+      this.startPathfindingMovement()
+    }
+  }
+
+  private startDirectMovement() {
     const distance = Phaser.Math.Distance.Between(this.x, this.y, this.targetX, this.targetY)
-    const duration = (distance / this.speed) * 100 // speedに応じて調整
+    const duration = (distance / this.speed) * 100
 
     this.moveTween = this.scene.tweens.add({
       targets: this,
@@ -127,6 +138,212 @@ export class Enemy extends Phaser.GameObjects.Container {
         this.onReachTarget()
       }
     })
+  }
+
+  private startPathfindingMovement() {
+    if (!this.mapPanels) {
+      console.log(`${this.enemyType}タコ: マップパネル情報なし、直線移動`)
+      this.startDirectMovement()
+      return
+    }
+
+    // 現在位置から目標位置へのパスを計算
+    const path = this.findPath()
+    
+    if (path.length === 0) {
+      console.log(`${this.enemyType}タコ: パスが見つからない、直線移動`)
+      this.startDirectMovement()
+      return
+    }
+
+    console.log(`${this.enemyType}タコ: パス見つかった (${path.length}ステップ)`)
+    // パスに沿って移動
+    this.moveAlongPath(path)
+  }
+
+  private findPath(): { x: number; y: number }[] {
+    if (!this.mapPanels) return []
+
+    const tileSize = 30
+    const centerTileX = Math.floor(this.mapPanels.length / 2)
+    const centerTileY = Math.floor(this.mapPanels[0].length / 2)
+
+    // 現在位置をタイル座標に変換（GameSceneの座標系に合わせる）
+    const startTileX = Math.floor(this.x / tileSize) + centerTileX
+    const startTileY = Math.floor(this.y / tileSize) + centerTileY
+    const endTileX = Math.floor(this.targetX / tileSize) + centerTileX
+    const endTileY = Math.floor(this.targetY / tileSize) + centerTileY
+
+    // A*風のパスファインディング
+    const openSet: Array<{x: number, y: number, g: number, h: number, f: number, parent: any}> = []
+    const closedSet = new Set<string>()
+    const allNodes = new Map<string, any>()
+    
+    // 開始ノード
+    const start = {
+      x: startTileX,
+      y: startTileY,
+      g: 0,
+      h: Math.abs(endTileX - startTileX) + Math.abs(endTileY - startTileY),
+      f: 0,
+      parent: null
+    }
+    start.f = start.g + start.h
+    openSet.push(start)
+    allNodes.set(`${startTileX},${startTileY}`, start)
+
+    while (openSet.length > 0) {
+      // f値が最小のノードを選択
+      openSet.sort((a, b) => a.f - b.f)
+      const current = openSet.shift()!
+      
+      // 目標に到達
+      if (current.x === endTileX && current.y === endTileY) {
+        return this.reconstructPath(current, centerTileX, centerTileY, tileSize)
+      }
+      
+      closedSet.add(`${current.x},${current.y}`)
+      
+      // 隣接ノードを探索
+      const neighbors = [
+        {x: current.x + 1, y: current.y},
+        {x: current.x - 1, y: current.y},
+        {x: current.x, y: current.y + 1},
+        {x: current.x, y: current.y - 1}
+      ]
+      
+      for (const neighbor of neighbors) {
+        const neighborKey = `${neighbor.x},${neighbor.y}`
+        
+        // 移動可能かチェック
+        if (!this.canMoveToTile(neighbor.x, neighbor.y) || closedSet.has(neighborKey)) {
+          continue
+        }
+        
+        const g = current.g + 1
+        const h = Math.abs(endTileX - neighbor.x) + Math.abs(endTileY - neighbor.y)
+        const f = g + h
+        
+        // 既により良いパスがあるかチェック
+        const existingNode = openSet.find(node => node.x === neighbor.x && node.y === neighbor.y)
+        if (existingNode && existingNode.g <= g) {
+          continue
+        }
+        
+        // ノードを追加/更新
+        if (existingNode) {
+          existingNode.g = g
+          existingNode.f = f
+          existingNode.parent = current
+        } else {
+          const newNode = {
+            x: neighbor.x,
+            y: neighbor.y,
+            g: g,
+            h: h,
+            f: f,
+            parent: current
+          }
+          openSet.push(newNode)
+          allNodes.set(neighborKey, newNode)
+        }
+      }
+      
+      // 探索制限（無限ループ防止）
+      if (openSet.length > 200) {
+        break
+      }
+    }
+
+    // パスが見つからない
+    return []
+  }
+
+  private reconstructPath(goalNode: any, centerTileX: number, centerTileY: number, tileSize: number): { x: number; y: number }[] {
+    const path: { x: number; y: number }[] = []
+    let current = goalNode
+    
+    // ゴールから開始点へ逆順でたどる
+    while (current && current.parent) {
+      const worldX = (current.x - centerTileX) * tileSize
+      const worldY = (current.y - centerTileY) * tileSize
+      path.unshift({ x: worldX, y: worldY })
+      current = current.parent
+      
+      // 無限ループ防止
+      if (path.length > 100) break
+    }
+    
+    return path
+  }
+
+  private canMoveToTile(tileX: number, tileY: number): boolean {
+    if (!this.mapPanels || 
+        tileX < 0 || tileX >= this.mapPanels.length ||
+        tileY < 0 || tileY >= this.mapPanels[0].length) {
+      return false
+    }
+
+    const panel = this.mapPanels[tileX][tileY]
+    if (!panel) return false
+
+    // 敵タイプに応じた移動制限
+    let canMove = false
+    switch (this.enemyType) {
+      case 'ground':
+        canMove = panel.type === 'path' || panel.type === 'rail' // あぜ道と線路のみ
+        break
+      case 'water':
+        canMove = panel.type === 'water' // 水パネルのみ
+        break
+      case 'underground':
+        canMove = panel.type === 'rice_field' || panel.type === 'path' // 田んぼとあぜ道のみ
+        break
+      case 'air':
+        canMove = true // 制限なし
+        break
+      default:
+        canMove = true
+    }
+
+    if (this.enemyType === 'water') {
+      console.log(`水タコ: タイル(${tileX},${tileY}) = ${panel.type}, 移動可能: ${canMove}`)
+    }
+
+    return canMove
+  }
+
+  private moveAlongPath(path: { x: number; y: number }[]) {
+    if (path.length === 0) {
+      this.onReachTarget()
+      return
+    }
+
+    let currentIndex = 0
+    const moveToNext = () => {
+      if (currentIndex >= path.length) {
+        this.onReachTarget()
+        return
+      }
+
+      const target = path[currentIndex]
+      const distance = Phaser.Math.Distance.Between(this.x, this.y, target.x, target.y)
+      const duration = (distance / this.speed) * 100
+
+      this.moveTween = this.scene.tweens.add({
+        targets: this,
+        x: target.x,
+        y: target.y,
+        duration: duration,
+        ease: 'Linear',
+        onComplete: () => {
+          currentIndex++
+          moveToNext()
+        }
+      })
+    }
+
+    moveToNext()
   }
 
   private getMovementEase(): string {

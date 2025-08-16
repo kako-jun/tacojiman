@@ -52,11 +52,11 @@ export class GameScene extends Phaser.Scene {
     this.generateMorningTime()
     this.createWireframeMap(width, height)
     
-    // プレイヤーの家（中央）
-    this.playerHouse = this.add.rectangle(width / 2, height / 2, 40, 40, 0x888888)
-    this.playerHouse.setStrokeStyle(2, 0xffffff)
+    // プレイヤーの家は自宅パネルとして表示されるため、大きな四角は不要
+    // 家の位置は画面中央（width/2, height/2）として扱う
+    this.playerHouse = this.add.rectangle(width / 2, height / 2, 1, 1, 0x000000, 0) // 透明な当たり判定用
     this.playerHouse.setInteractive()
-    this.playerHouse.setDepth(50) // UIより低く、背景より高いdepthに設定
+    this.playerHouse.setDepth(50)
     
     // システム初期化
     this.cameraController = new CameraController(this, width / 2, height / 2)
@@ -133,14 +133,20 @@ export class GameScene extends Phaser.Scene {
     this.otherHousePositions = []
     this.stationPositions = []
     
+    // 中央タイルの位置を計算
+    const centerTileX = Math.floor(this.mapPanels.length / 2)
+    const centerTileY = Math.floor(this.mapPanels[0].length / 2)
+    
     // タイル描画
     for (let x = 0; x < this.mapPanels.length; x++) {
       for (let y = 0; y < this.mapPanels[0].length; y++) {
         const panel = this.mapPanels[x][y]
         if (!panel) continue
         
-        const tileX = x * tileSize - mapSize / 2
-        const tileY = y * tileSize - mapSize / 2
+        // 自宅パネル（中央）が画面中央に来るよう位置調整
+        // パネルの中心が画面中央に来るよう、微調整
+        const tileX = (x - centerTileX) * tileSize - tileSize / 2 + 1
+        const tileY = (y - centerTileY) * tileSize - tileSize / 2
         
         // パネルタイプに応じた色を取得
         const config = PANEL_CONFIG[panel.type]
