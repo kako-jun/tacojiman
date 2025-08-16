@@ -1,0 +1,48 @@
+{
+  "name": "tacojiman",
+  "version": "0.1.0",
+  "description": "朝の蛸島駅で繰り広げられる3分間の忍術バトルゲーム",
+  "main": "src/main.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "game",
+    "phaser",
+    "typescript",
+    "pixel-art",
+    "action",
+    "mobile",
+    "noto-peninsula"
+  ],
+  "author": "kako-jun",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.8",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.45.0",
+    "typescript": "^5.0.2",
+    "vite": "^5.0.0",
+    "vitest": "^1.0.0"
+  },
+  "dependencies": {
+    "phaser": "^3.70.0",
+    "zod": "^3.22.0",
+    "js-yaml": "^4.1.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kako-jun/tacojiman.git"
+  },
+  "homepage": "https://kako-jun.github.io/tacojiman",
+  "bugs": {
+    "url": "https://github.com/kako-jun/tacojiman/issues"
+  }
+}

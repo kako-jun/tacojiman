@@ -1,0 +1,15 @@
+# tacojiman ゲーム設定
+
+graphics:
+  pixelArt: true
+  colorTemperature: 0.8  # 朝焼けの色温度（低めで暖かい色調）
+  enableTrails: true     # p5.js風残像エフェクト
+
+audio:
+  enableSounds: false     # デフォルトは無音（電車内プレイ対応）
+  enableNatureSounds: false
+  volume: 0
+
+gameplay:
+  enableVibration: false  # 電車内マナー対応
+  autoSubmitRanking: true # 自動ランキング投稿

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="朝の蛸島駅で繰り広げられる3分間の忍術バトルゲーム" />
+  <meta name="keywords" content="ゲーム,タコジマン,能登,忍術,アクション" />
+  <meta name="author" content="kako-jun" />
+  <title>tacojiman（タコジマン）</title>
+  
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+    }
+    
+    #game-container {
+      width: 100%;
+      max-width: 400px;
+      height: 100vh;
+      max-height: 600px;
+      background: #000;
+      position: relative;
+    }
+    
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div id="loading">
+      <h2>tacojiman</h2>
+      <p>Loading...</p>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
