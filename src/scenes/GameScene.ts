@@ -40,6 +40,7 @@ export class GameScene extends Phaser.Scene {
   // マップ関連
   private mapPanels: MapPanel[][] = []
   private otherHousePositions: { x: number; y: number }[] = []
+  private stationPositions: { x: number; y: number }[] = []
 
   constructor() {
     super({ key: 'GameScene' })
@@ -59,7 +60,7 @@ export class GameScene extends Phaser.Scene {
     
     // システム初期化
     this.cameraController = new CameraController(this, width / 2, height / 2)
-    this.enemyManager = new EnemyManager(this, width / 2, height / 2, width, height)
+    this.enemyManager = new EnemyManager(this, width / 2, height / 2, width, height, this.mapPanels)
     
     this.generateRandomBombType() // 最初にボムタイプを生成
     this.startUIScene() // UIシーンを開始
@@ -127,8 +128,9 @@ export class GameScene extends Phaser.Scene {
     const mapGenerator = new MapGenerator(mapSize, mapSize, tileSize)
     this.mapPanels = mapGenerator.generateMap()
     
-    // 他人の家の位置を記録
+    // 他人の家と駅の位置を記録
     this.otherHousePositions = []
+    this.stationPositions = []
     
     // タイル描画
     for (let x = 0; x < this.mapPanels.length; x++) {
@@ -156,6 +158,13 @@ export class GameScene extends Phaser.Scene {
           // 他人の家も少し強調、位置を記録
           graphics.lineStyle(2, 0xffaa00, 0.5)
           this.otherHousePositions.push({
+            x: width / 2 + tileX + tileSize / 2,
+            y: height / 2 + tileY + tileSize / 2
+          })
+        } else if (panel.type === 'station') {
+          // 駅も攻撃無効エリア、位置を記録
+          graphics.lineStyle(2, 0xcccccc, 0.5)
+          this.stationPositions.push({
             x: width / 2 + tileX + tileSize / 2,
             y: height / 2 + tileY + tileSize / 2
           })
@@ -484,10 +493,25 @@ export class GameScene extends Phaser.Scene {
     }
     return false
   }
+  
+  private isInStation(x: number, y: number): boolean {
+    // 駅パネル（60x60）の範囲内かチェック
+    for (const station of this.stationPositions) {
+      if (Math.abs(x - station.x) < 30 && Math.abs(y - station.y) < 30) {
+        return true
+      }
+    }
+    return false
+  }
+  
+  private isInInvulnerableArea(x: number, y: number): boolean {
+    // 他人の家または駅の範囲内かチェック
+    return this.isInOtherHouse(x, y) || this.isInStation(x, y)
+  }
 
   private performBeeAttack(x: number, y: number) {
-    // 他人の家パネル内への攻撃は無効
-    if (this.isInOtherHouse(x, y)) {
+    // 他人の家または駅パネル内への攻撃は無効
+    if (this.isInInvulnerableArea(x, y)) {
       // エフェクトも表示しない
       return
     }
@@ -495,17 +519,17 @@ export class GameScene extends Phaser.Scene {
     let hit = false
     
     // 通常敵への攻撃（攻撃範囲を80ピクセルに拡大 - 指が隠れる範囲）
-    // ただし、他人の家内の敵は除外
+    // ただし、無敵エリア内の敵は除外
     const attackResult = this.enemyManager.checkAttackHit(x, y, 80, (enemy) => {
-      return !this.isInOtherHouse(enemy.x, enemy.y)
+      return !this.isInInvulnerableArea(enemy.x, enemy.y)
     })
     if (attackResult.hit) {
       this.currentScore += attackResult.score
       hit = true
     }
     
-    // タココングへの攻撃（他人の家内でなければ）
-    if (this.takokong && this.takokong.checkCollision(x, y, 40) && !this.isInOtherHouse(this.takokong.x, this.takokong.y)) {
+    // タココングへの攻撃（無敵エリア内でなければ）
+    if (this.takokong && this.takokong.checkCollision(x, y, 40) && !this.isInInvulnerableArea(this.takokong.x, this.takokong.y)) {
       const bossResult = this.takokong.takeDamage(1)
       if (bossResult.score > 0) {
         this.currentScore += bossResult.score

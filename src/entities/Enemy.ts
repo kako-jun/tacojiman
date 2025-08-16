@@ -20,6 +20,9 @@ export class Enemy extends Phaser.GameObjects.Container {
   private trailTimer: number = 0
   private readonly TRAIL_INTERVAL = 50 // 50msごとに残像を作成
   private readonly MAX_TRAIL_LENGTH = 5 // 最大5個の残像
+  
+  // マップパネル情報
+  private mapPanels?: any[][]
 
   constructor(
     scene: Phaser.Scene, 
@@ -27,7 +30,8 @@ export class Enemy extends Phaser.GameObjects.Container {
     y: number, 
     enemyData: EnemyData,
     targetX: number,
-    targetY: number
+    targetY: number,
+    mapPanels?: any[][]
   ) {
     super(scene, x, y)
     
@@ -38,6 +42,7 @@ export class Enemy extends Phaser.GameObjects.Container {
     this.scoreValue = enemyData.score
     this.targetX = targetX
     this.targetY = targetY
+    this.mapPanels = mapPanels
     
 
     // 敵スプライト作成

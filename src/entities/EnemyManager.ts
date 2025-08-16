@@ -12,13 +12,15 @@ export class EnemyManager {
   private mapWidth: number
   private mapHeight: number
   private decoyTargets: Map<number, { x: number; y: number; range: number }> = new Map()
+  private mapPanels: any[][] = []
 
-  constructor(scene: Phaser.Scene, houseX: number, houseY: number, mapWidth: number, mapHeight: number) {
+  constructor(scene: Phaser.Scene, houseX: number, houseY: number, mapWidth: number, mapHeight: number, mapPanels: any[][]) {
     this.scene = scene
     this.playerHouseX = houseX
     this.playerHouseY = houseY
     this.mapWidth = mapWidth
     this.mapHeight = mapHeight
+    this.mapPanels = mapPanels
 
     // 敵が家に到達した時のイベントリスナー
     this.scene.events.on('enemy-reached-house', this.onEnemyReachedHouse, this)
@@ -63,7 +65,8 @@ export class EnemyManager {
       spawnPos.y,
       enemyData,
       this.playerHouseX,
-      this.playerHouseY
+      this.playerHouseY,
+      this.mapPanels
     )
 
     this.enemies.push(enemy)
@@ -92,27 +95,27 @@ export class EnemyManager {
   }
 
   private getSpawnPosition(enemyType: EnemyType): { x: number; y: number } {
-    const margin = 30
+    const tileSize = 60 // マップタイル1マスのサイズ
+    const centerTileX = Math.floor(this.mapPanels.length / 2)
+    const centerTileY = Math.floor(this.mapPanels[0].length / 2)
     
     switch (enemyType) {
       case 'ground':
-        // 道路歩行型：画面端から
-        return Math.random() < 0.5 ? 
-          { x: -margin, y: Math.random() * this.mapHeight } :
-          { x: this.mapWidth + margin, y: Math.random() * this.mapHeight }
+        // 地上タコ：あぜ道の端から出現
+        return this.findPathEdgePosition()
       
       case 'water':
-        // 海上遡上型：上端から
-        return { x: Math.random() * this.mapWidth, y: -margin }
+        // 水タコ：水パネルの端から出現
+        return this.findWaterEdgePosition()
       
       case 'air':
-        // 空挺降下型：空から（上端のさらに上）
-        return { x: Math.random() * this.mapWidth, y: -margin * 2 }
+        // 空タコ：空から（上端のさらに上）
+        return { x: Math.random() * this.mapWidth, y: -60 }
       
       case 'underground':
-        // 地下掘削型：家の近くに突然出現
+        // 地下タコ：家の近くに突然出現
         const angle = Math.random() * Math.PI * 2
-        const distance = 80 + Math.random() * 100 // 家から80-180ピクセル離れた場所
+        const distance = 80 + Math.random() * 100
         return {
           x: this.playerHouseX + Math.cos(angle) * distance,
           y: this.playerHouseY + Math.sin(angle) * distance
@@ -121,6 +124,64 @@ export class EnemyManager {
       default:
         return { x: 0, y: 0 }
     }
+  }
+  
+  private findPathEdgePosition(): { x: number; y: number } {
+    const tileSize = 60
+    const pathPositions: { x: number; y: number }[] = []
+    
+    // マップの端にあるあぜ道を探す
+    for (let x = 0; x < this.mapPanels.length; x++) {
+      for (let y = 0; y < this.mapPanels[0].length; y++) {
+        const panel = this.mapPanels[x][y]
+        if (panel && panel.type === 'path') {
+          // 端にあるかチェック
+          if (x === 0 || x === this.mapPanels.length - 1 || 
+              y === 0 || y === this.mapPanels[0].length - 1) {
+            const worldX = this.mapWidth / 2 + (x - Math.floor(this.mapPanels.length / 2)) * tileSize
+            const worldY = this.mapHeight / 2 + (y - Math.floor(this.mapPanels[0].length / 2)) * tileSize
+            pathPositions.push({ x: worldX, y: worldY })
+          }
+        }
+      }
+    }
+    
+    // ランダムなあぜ道の端を選択
+    if (pathPositions.length > 0) {
+      return pathPositions[Math.floor(Math.random() * pathPositions.length)]
+    }
+    
+    // あぜ道の端が見つからない場合はマップ端から
+    return { x: -30, y: Math.random() * this.mapHeight }
+  }
+  
+  private findWaterEdgePosition(): { x: number; y: number } {
+    const tileSize = 60
+    const waterPositions: { x: number; y: number }[] = []
+    
+    // マップの端にある水パネルを探す
+    for (let x = 0; x < this.mapPanels.length; x++) {
+      for (let y = 0; y < this.mapPanels[0].length; y++) {
+        const panel = this.mapPanels[x][y]
+        if (panel && panel.type === 'water') {
+          // 端にあるかチェック
+          if (x === 0 || x === this.mapPanels.length - 1 || 
+              y === 0 || y === this.mapPanels[0].length - 1) {
+            const worldX = this.mapWidth / 2 + (x - Math.floor(this.mapPanels.length / 2)) * tileSize
+            const worldY = this.mapHeight / 2 + (y - Math.floor(this.mapPanels[0].length / 2)) * tileSize
+            waterPositions.push({ x: worldX, y: worldY })
+          }
+        }
+      }
+    }
+    
+    // ランダムな水パネルの端を選択
+    if (waterPositions.length > 0) {
+      return waterPositions[Math.floor(Math.random() * waterPositions.length)]
+    }
+    
+    // 水パネルの端が見つからない場合は上端から
+    return { x: Math.random() * this.mapWidth, y: -30 }
   }
 
   public checkAttackHit(x: number, y: number, radius: number = 15, filter?: (enemy: Enemy) => boolean): { hit: boolean; score: number; enemy?: Enemy } {
