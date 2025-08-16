@@ -31,7 +31,7 @@ export const EnemyDataSchema = z.object({
 export type EnemyData = z.infer<typeof EnemyDataSchema>
 
 // ボム忍術の種類
-export const BombTypeSchema = z.enum(['proton', 'muddy', 'sentry'])
+export const BombTypeSchema = z.enum(['proton', 'muddy', 'sentry', 'muteki', 'sol', 'dainsleif', 'jakuhou', 'bunshin'])
 export type BombType = z.infer<typeof BombTypeSchema>
 
 // ボム忍術データ

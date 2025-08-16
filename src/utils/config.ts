@@ -123,6 +123,42 @@ export const BOMB_DATA = [
     damage: 1,
     duration: 5, // 5秒間
     range: 150
+  }),
+  BombDataSchema.parse({
+    type: 'muteki',
+    name: '無敵ホーダイの術',
+    description: 'ピカッと光って5連続範囲爆撃',
+    damage: 2, // 威力が高い
+    range: 80  // 各爆発の範囲
+  }),
+  BombDataSchema.parse({
+    type: 'sol',
+    name: 'SOLの術',
+    description: '宇宙からの超広範囲殲滅攻撃',
+    damage: 3, // 最高威力
+    range: 150 // 超広範囲
+  }),
+  BombDataSchema.parse({
+    type: 'dainsleif',
+    name: 'ダインスレイブの術',
+    description: '貫通の槍・外したら完全に無駄',
+    damage: 5, // 極限威力
+    range: 20  // 細い範囲
+  }),
+  BombDataSchema.parse({
+    type: 'jakuhou',
+    name: 'じゃくほうらいこうべんの術',
+    description: 'ソイフォンのばんかい・巨大ミサイル',
+    damage: 4, // 高威力
+    range: 120 // 大範囲
+  }),
+  BombDataSchema.parse({
+    type: 'bunshin',
+    name: '分身の術',
+    description: '菊丸風2つの分身・本物含め3個で敵を誘導',
+    damage: 0, // ダメージなし
+    duration: 5, // 5秒間
+    range: 50  // 誘導範囲
   })
 ] as const
 
