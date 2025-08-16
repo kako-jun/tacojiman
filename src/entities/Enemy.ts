@@ -23,6 +23,10 @@ export class Enemy extends Phaser.GameObjects.Container {
   
   // マップパネル情報
   private mapPanels?: any[][]
+  
+  // 空タコ用の遠近法システム
+  private initialDistance: number = 0
+  private baseScale: number = 1
 
   constructor(
     scene: Phaser.Scene, 
@@ -56,6 +60,11 @@ export class Enemy extends Phaser.GameObjects.Container {
     
     // 初期位置を記録
     this.lastPosition = { x: this.x, y: this.y }
+    
+    // 空タコの場合は遠近法システムを初期化
+    if (this.enemyType === 'air') {
+      this.initializePerspectiveSystem()
+    }
     
     // 残像更新タイマーを開始
     this.startTrailSystem()
@@ -126,7 +135,12 @@ export class Enemy extends Phaser.GameObjects.Container {
 
   private startDirectMovement() {
     const distance = Phaser.Math.Distance.Between(this.x, this.y, this.targetX, this.targetY)
-    const duration = (distance / this.speed) * 100
+    let duration = (distance / this.speed) * 100
+
+    // 空タコの場合は基本持続時間を少し延長して、よりゆっくりとした着地感を演出
+    if (this.enemyType === 'air') {
+      duration *= 1.5 // 1.5倍の時間をかけて移動
+    }
 
     this.moveTween = this.scene.tweens.add({
       targets: this,
@@ -134,6 +148,12 @@ export class Enemy extends Phaser.GameObjects.Container {
       y: this.targetY,
       duration: duration,
       ease: this.getMovementEase(),
+      onUpdate: () => {
+        // 空タコの場合は移動中にスケールを更新
+        if (this.enemyType === 'air') {
+          this.updatePerspectiveScale()
+        }
+      },
       onComplete: () => {
         this.onReachTarget()
       }
@@ -328,14 +348,27 @@ export class Enemy extends Phaser.GameObjects.Container {
 
       const target = path[currentIndex]
       const distance = Phaser.Math.Distance.Between(this.x, this.y, target.x, target.y)
-      const duration = (distance / this.speed) * 100
+      let duration = (distance / this.speed) * 100
+
+      // 空タコの場合は進行度に応じて持続時間を調整（後半ほど長く）
+      if (this.enemyType === 'air') {
+        const progressRatio = currentIndex / path.length // 0〜1の進行度
+        const durationMultiplier = 1 + (progressRatio * 2) // 1倍〜3倍に持続時間延長
+        duration *= durationMultiplier
+      }
 
       this.moveTween = this.scene.tweens.add({
         targets: this,
         x: target.x,
         y: target.y,
         duration: duration,
-        ease: 'Linear',
+        ease: this.enemyType === 'air' ? 'Quart.easeOut' : 'Linear', // 空タコは減速カーブ
+        onUpdate: () => {
+          // 空タコの場合は移動中にスケールを更新
+          if (this.enemyType === 'air') {
+            this.updatePerspectiveScale()
+          }
+        },
         onComplete: () => {
           currentIndex++
           moveToNext()
@@ -346,6 +379,36 @@ export class Enemy extends Phaser.GameObjects.Container {
     moveToNext()
   }
 
+  private initializePerspectiveSystem() {
+    // 初期距離を計算（家からの距離）
+    this.initialDistance = Phaser.Math.Distance.Between(this.x, this.y, this.targetX, this.targetY)
+    
+    // 遠近法による初期スケール計算（遠いほど大きく、最大3倍）
+    const maxDistance = 500 // 想定最大距離
+    const distanceRatio = Math.min(this.initialDistance / maxDistance, 1)
+    this.baseScale = 1 + (distanceRatio * 2) // 1倍〜3倍
+    
+    // 初期スケールを適用
+    this.setScale(this.baseScale)
+    
+    console.log(`空タコ初期化: 距離=${this.initialDistance.toFixed(0)}, スケール=${this.baseScale.toFixed(2)}`)
+  }
+
+  private updatePerspectiveScale() {
+    if (this.enemyType !== 'air') return
+    
+    // 現在の家からの距離
+    const currentDistance = Phaser.Math.Distance.Between(this.x, this.y, this.targetX, this.targetY)
+    
+    // 距離に応じたスケール計算（遠いほど大きく、近いほど小さく）
+    const maxDistance = 500
+    const distanceRatio = Math.min(currentDistance / maxDistance, 1)
+    const targetScale = 1 + (distanceRatio * 2) // 1倍〜3倍
+    
+    // スケールを適用
+    this.setScale(targetScale)
+  }
+
   private getMovementEase(): string {
     switch (this.enemyType) {
       case 'ground':
@@ -353,7 +416,7 @@ export class Enemy extends Phaser.GameObjects.Container {
       case 'water':
         return 'Sine.easeInOut' // 海上遡上型：波のような動き
       case 'air':
-        return 'Back.easeOut' // 空挺降下型：パラシュート風
+        return 'Quart.easeOut' // 空挺降下型：最初速く、着地時にゆっくり
       case 'underground':
         return 'Bounce.easeOut' // 地下掘削型：突然出現
       default:
@@ -361,15 +424,17 @@ export class Enemy extends Phaser.GameObjects.Container {
     }
   }
 
-  public takeDamage(damage: number = 1): { destroyed: boolean; score: number } {
+  public takeDamage(damage: number = 1, zoomMultiplier: number = 1): { destroyed: boolean; score: number } {
     this.currentHP -= damage
     
     // ダメージエフェクト
     this.showDamageEffect()
     
     if (this.currentHP <= 0) {
+      // ズーム倍率を考慮したスコア計算
+      const finalScore = Math.floor(this.scoreValue * zoomMultiplier)
       this.destroy()
-      return { destroyed: true, score: this.scoreValue }
+      return { destroyed: true, score: finalScore }
     } else {
       // HP減少による見た目変化
       this.updateAppearance()
@@ -420,6 +485,13 @@ export class Enemy extends Phaser.GameObjects.Container {
   public checkCollision(x: number, y: number, radius: number = 60): boolean {
     // 敵の当たり判定を大きくする（デフォルト60ピクセル - 指が隠れる範囲）
     const distance = Phaser.Math.Distance.Between(this.x, this.y, x, y)
+    
+    // 空タコの場合はスケールに応じて当たり判定も調整
+    if (this.enemyType === 'air') {
+      const adjustedRadius = radius * this.scaleX // 現在のスケールを考慮
+      return distance <= adjustedRadius
+    }
+    
     return distance <= radius
   }
 
@@ -493,6 +565,15 @@ export class Enemy extends Phaser.GameObjects.Container {
     // 残像の設定
     trailSprite.setAlpha(0.4) // 透明度を設定
     trailSprite.setDepth(90)  // 敵より少し後ろに配置
+    
+    // 空タコの場合は現在のスケールを残像にも適用
+    if (this.enemyType === 'air') {
+      const currentDistance = Phaser.Math.Distance.Between(x, y, this.targetX, this.targetY)
+      const maxDistance = 500
+      const distanceRatio = Math.min(currentDistance / maxDistance, 1)
+      const trailScale = 1 + (distanceRatio * 2) // 1倍〜3倍
+      trailSprite.setScale(trailScale)
+    }
     
     // 残像を配列に追加
     this.trailSprites.push(trailSprite)

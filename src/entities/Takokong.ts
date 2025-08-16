@@ -21,12 +21,14 @@ export class Takokong extends Phaser.GameObjects.Container {
   
   private targetX: number
   private targetY: number
+  private mapPanels?: any[][]
 
-  constructor(scene: Phaser.Scene, x: number, y: number, targetX: number, targetY: number) {
+  constructor(scene: Phaser.Scene, x: number, y: number, targetX: number, targetY: number, mapPanels?: any[][]) {
     super(scene, x, y)
     
     this.targetX = targetX
     this.targetY = targetY
+    this.mapPanels = mapPanels
     
     this.createSprite()
     this.createHealthBar()
@@ -137,7 +139,33 @@ export class Takokong extends Phaser.GameObjects.Container {
       loop: true
     })
     
-    // 家に向かってゆっくり移動
+    // 地上タコと同様にパスファインディングで移動
+    this.startPathfindingMovement()
+  }
+
+  private startPathfindingMovement() {
+    if (!this.mapPanels) {
+      console.log('タココング: マップパネル情報なし、直線移動')
+      this.startDirectMovement()
+      return
+    }
+
+    // 現在位置から目標位置へのパスを計算
+    const path = this.findPath()
+    
+    if (path.length === 0) {
+      console.log('タココング: パスが見つからない、直線移動')
+      this.startDirectMovement()
+      return
+    }
+
+    console.log(`タココング: パス見つかった (${path.length}ステップ)`)
+    // パスに沿って移動（地上タコより少し速い）
+    this.moveAlongPath(path)
+  }
+
+  private startDirectMovement() {
+    // 直線移動（フォールバック）
     this.moveTween = this.scene.tweens.add({
       targets: this,
       x: this.targetX,
@@ -148,6 +176,155 @@ export class Takokong extends Phaser.GameObjects.Container {
         this.onReachTarget()
       }
     })
+  }
+
+  private findPath(): { x: number; y: number }[] {
+    if (!this.mapPanels) return []
+
+    const tileSize = 30
+    const centerTileX = Math.floor(this.mapPanels.length / 2)
+    const centerTileY = Math.floor(this.mapPanels[0].length / 2)
+
+    // 現在位置をタイル座標に変換
+    const startTileX = Math.floor(this.x / tileSize) + centerTileX
+    const startTileY = Math.floor(this.y / tileSize) + centerTileY
+    const endTileX = Math.floor(this.targetX / tileSize) + centerTileX
+    const endTileY = Math.floor(this.targetY / tileSize) + centerTileY
+
+    // A*パスファインディング
+    const openSet: Array<{x: number, y: number, g: number, h: number, f: number, parent: any}> = []
+    const closedSet = new Set<string>()
+    
+    const start = {
+      x: startTileX,
+      y: startTileY,
+      g: 0,
+      h: Math.abs(endTileX - startTileX) + Math.abs(endTileY - startTileY),
+      f: 0,
+      parent: null
+    }
+    start.f = start.g + start.h
+    openSet.push(start)
+
+    while (openSet.length > 0) {
+      openSet.sort((a, b) => a.f - b.f)
+      const current = openSet.shift()!
+      
+      if (current.x === endTileX && current.y === endTileY) {
+        return this.reconstructPath(current, centerTileX, centerTileY, tileSize)
+      }
+      
+      closedSet.add(`${current.x},${current.y}`)
+      
+      const neighbors = [
+        {x: current.x + 1, y: current.y},
+        {x: current.x - 1, y: current.y},
+        {x: current.x, y: current.y + 1},
+        {x: current.x, y: current.y - 1}
+      ]
+      
+      for (const neighbor of neighbors) {
+        const neighborKey = `${neighbor.x},${neighbor.y}`
+        
+        if (!this.canMoveToTile(neighbor.x, neighbor.y) || closedSet.has(neighborKey)) {
+          continue
+        }
+        
+        const g = current.g + 1
+        const h = Math.abs(endTileX - neighbor.x) + Math.abs(endTileY - neighbor.y)
+        const f = g + h
+        
+        const existingNode = openSet.find(node => node.x === neighbor.x && node.y === neighbor.y)
+        if (existingNode && existingNode.g <= g) {
+          continue
+        }
+        
+        if (existingNode) {
+          existingNode.g = g
+          existingNode.f = f
+          existingNode.parent = current
+        } else {
+          openSet.push({
+            x: neighbor.x,
+            y: neighbor.y,
+            g: g,
+            h: h,
+            f: f,
+            parent: current
+          })
+        }
+      }
+      
+      if (openSet.length > 200) {
+        break
+      }
+    }
+
+    return []
+  }
+
+  private reconstructPath(goalNode: any, centerTileX: number, centerTileY: number, tileSize: number): { x: number; y: number }[] {
+    const path: { x: number; y: number }[] = []
+    let current = goalNode
+    
+    while (current && current.parent) {
+      const worldX = (current.x - centerTileX) * tileSize
+      const worldY = (current.y - centerTileY) * tileSize
+      path.unshift({ x: worldX, y: worldY })
+      current = current.parent
+      
+      if (path.length > 100) break
+    }
+    
+    return path
+  }
+
+  private canMoveToTile(tileX: number, tileY: number): boolean {
+    if (!this.mapPanels || 
+        tileX < 0 || tileX >= this.mapPanels.length ||
+        tileY < 0 || tileY >= this.mapPanels[0].length) {
+      return false
+    }
+
+    const panel = this.mapPanels[tileX][tileY]
+    if (!panel) return false
+
+    // タココングは地上タコと同じルール（あぜ道と線路のみ移動可能）
+    return panel.type === 'path' || panel.type === 'rail'
+  }
+
+  private moveAlongPath(path: { x: number; y: number }[]) {
+    if (path.length === 0) {
+      this.onReachTarget()
+      return
+    }
+
+    let currentIndex = 0
+    const moveToNext = () => {
+      if (currentIndex >= path.length) {
+        this.onReachTarget()
+        return
+      }
+
+      const target = path[currentIndex]
+      const distance = Phaser.Math.Distance.Between(this.x, this.y, target.x, target.y)
+      // タココングは地上タコより少し速い（速度2.0）
+      const duration = (distance / 2.0) * 100
+
+      this.moveTween = this.scene.tweens.add({
+        targets: this,
+        x: target.x,
+        y: target.y,
+        duration: duration,
+        ease: 'Linear',
+        onComplete: () => {
+          currentIndex++
+          moveToNext()
+        }
+      })
+    }
+
+    moveToNext()
   }
 
   private performAttack() {
@@ -175,7 +352,7 @@ export class Takokong extends Phaser.GameObjects.Container {
     }
   }
 
-  public takeDamage(damage: number = 1): { destroyed: boolean; score: number } {
+  public takeDamage(damage: number = 1, zoomMultiplier: number = 1): { destroyed: boolean; score: number } {
     this.currentHits++
     
     if (this.hasBarrier) {
@@ -203,7 +380,9 @@ export class Takokong extends Phaser.GameObjects.Container {
     
     if (this.visualHP <= 0) {
       this.onDefeated()
-      return { destroyed: true, score: 100 }
+      // ズーム倍率を考慮したスコア計算（タココングは高スコア）
+      const finalScore = Math.floor(100 * zoomMultiplier)
+      return { destroyed: true, score: finalScore }
     }
     
     return { destroyed: false, score: 0 }
@@ -388,10 +567,13 @@ export class Takokong extends Phaser.GameObjects.Container {
   }
 
   private onReachTarget() {
-    // 家に到達 = ゲームオーバー
+    // 家に到達 = スコア減算（10ポイント）
     if (this.scene && this.scene.events) {
-      this.scene.events.emit('game-over-takokong-reached')
+      this.scene.events.emit('player-damaged', 10)
     }
+    
+    // タココングを削除
+    this.destroy()
   }
 
   public checkCollision(x: number, y: number, radius: number = 40): boolean {

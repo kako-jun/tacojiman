@@ -189,16 +189,16 @@ export class GameScene extends Phaser.Scene {
     
     mapContainer.add(graphics)
     
-    // 背景回転を一時停止（デバッグ用）
-    // const rotationDirection = Math.random() > 0.5 ? 1 : -1
-    // 
-    // this.tweens.add({
-    //   targets: mapContainer,
-    //   rotation: rotationDirection * Math.PI * 2,
-    //   duration: 120000 + Math.random() * 60000, // 2〜3分で1回転（より遅く）
-    //   repeat: -1,
-    //   ease: 'None'
-    // })
+    // ゆっくりとした背景回転を開始
+    const rotationDirection = Math.random() > 0.5 ? 1 : -1
+    
+    this.tweens.add({
+      targets: mapContainer,
+      rotation: rotationDirection * Math.PI * 2,
+      duration: 120000 + Math.random() * 60000, // 2〜3分で1回転（ゆっくり）
+      repeat: -1,
+      ease: 'None'
+    })
   }
 
   private drawConnections(graphics: Phaser.GameObjects.Graphics, tileX: number, tileY: number, tileSize: number, connections: any, type: string) {
@@ -297,10 +297,7 @@ export class GameScene extends Phaser.Scene {
       this.time.delayedCall(1000, () => this.endGame())
     })
 
-    this.events.on('game-over-takokong-reached', () => {
-      // タココングが家に到達 = 強制ゲーム終了
-      this.endGame()
-    })
+    // タココング到達時のゲームオーバーは削除（スコア減算のみ）
 
     this.events.on('bomb-damage-line', (data: any) => {
       // プロトンビームのライン攻撃
@@ -320,13 +317,14 @@ export class GameScene extends Phaser.Scene {
     this.events.on('muteki-explosion', (data: { x: number; y: number; range: number; damage: number }) => {
       // 無敵ホーダイの術の爆発ダメージ処理
       let totalScore = 0
+      const zoomMultiplier = this.cameraController.getCurrentZoom()
       
       // 通常敵へのダメージ
-      totalScore += this.enemyManager.checkBombHit(data.x, data.y, data.range, data.damage)
+      totalScore += this.enemyManager.checkBombHit(data.x, data.y, data.range, data.damage, zoomMultiplier)
       
       // タココングへのダメージ
       if (this.takokong && this.takokong.checkCollision(data.x, data.y, data.range)) {
-        const bossResult = this.takokong.takeDamage(data.damage)
+        const bossResult = this.takokong.takeDamage(data.damage, zoomMultiplier)
         if (bossResult.score > 0) {
           totalScore += bossResult.score
         }
@@ -339,13 +337,14 @@ export class GameScene extends Phaser.Scene {
     this.events.on('sol-strike', (data: { x: number; y: number; range: number; damage: number }) => {
       // SOLの術の超広範囲攻撃
       let totalScore = 0
+      const zoomMultiplier = this.cameraController.getCurrentZoom()
       
       // 通常敵へのダメージ
-      totalScore += this.enemyManager.checkBombHit(data.x, data.y, data.range, data.damage)
+      totalScore += this.enemyManager.checkBombHit(data.x, data.y, data.range, data.damage, zoomMultiplier)
       
       // タココングへのダメージ
       if (this.takokong && this.takokong.checkCollision(data.x, data.y, data.range)) {
-        const bossResult = this.takokong.takeDamage(data.damage)
+        const bossResult = this.takokong.takeDamage(data.damage, zoomMultiplier)
         if (bossResult.score > 0) {
           totalScore += bossResult.score
         }
@@ -525,11 +524,14 @@ export class GameScene extends Phaser.Scene {
     
     let hit = false
     
+    // ズーム倍率を取得（1倍〜3倍）
+    const zoomMultiplier = this.cameraController.getCurrentZoom()
+    
     // 通常敵への攻撃（攻撃範囲を80ピクセルに拡大 - 指が隠れる範囲）
     // ただし、無敵エリア内の敵は除外
     const attackResult = this.enemyManager.checkAttackHit(x, y, 80, (enemy) => {
       return !this.isInInvulnerableArea(enemy.x, enemy.y)
-    })
+    }, zoomMultiplier)
     if (attackResult.hit) {
       this.currentScore += attackResult.score
       hit = true
@@ -537,7 +539,7 @@ export class GameScene extends Phaser.Scene {
     
     // タココングへの攻撃（無敵エリア内でなければ）
     if (this.takokong && this.takokong.checkCollision(x, y, 40) && !this.isInInvulnerableArea(this.takokong.x, this.takokong.y)) {
-      const bossResult = this.takokong.takeDamage(1)
+      const bossResult = this.takokong.takeDamage(1, zoomMultiplier)
       if (bossResult.score > 0) {
         this.currentScore += bossResult.score
       }
@@ -546,6 +548,11 @@ export class GameScene extends Phaser.Scene {
     
     this.updateScoreDisplay()
     this.showAttackEffect(x, y, hit)
+    
+    // ズームボーナス表示
+    if (hit && zoomMultiplier > 1) {
+      this.showZoomBonusEffect(x, y, zoomMultiplier)
+    }
   }
 
   private activateBombJutsu() {
@@ -701,6 +708,32 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
+  private showZoomBonusEffect(x: number, y: number, zoomMultiplier: number) {
+    // ズーム倍率に応じたボーナス表示
+    const bonusText = `x${zoomMultiplier.toFixed(1)}`
+    const color = zoomMultiplier >= 3 ? '#ff0000' : zoomMultiplier >= 2 ? '#ff8800' : '#ffff00'
+    
+    const bonusDisplay = this.add.text(x, y - 30, bonusText, {
+      fontSize: '18px',
+      color: color,
+      fontFamily: 'monospace',
+      stroke: '#000000',
+      strokeThickness: 2
+    }).setOrigin(0.5)
+    
+    // ボーナステキストアニメーション
+    this.tweens.add({
+      targets: bonusDisplay,
+      y: y - 60,
+      scaleX: 1.2,
+      scaleY: 1.2,
+      alpha: 0,
+      duration: 800,
+      ease: 'Power2',
+      onComplete: () => bonusDisplay.destroy()
+    })
+  }
+
   private showBombEffect(x: number, y: number, radius: number) {
     // ボム攻撃エフェクト（指定された半径のまま、拡大なし）
     const effect = this.add.circle(x, y, radius, 0xff4444, 0.6)
@@ -753,17 +786,50 @@ export class GameScene extends Phaser.Scene {
     this.takokongSpawned = true
     this.enemyManager.stopSpawning()
     
-    // タココング生成
-    const { width, height } = this.scale
+    // タココングを地上タコと同じルール（あぜ道の端）から出現させる
+    const spawnPos = this.findPathEdgePosition()
     this.takokong = new Takokong(
       this, 
-      width / 2, 
-      -100, // 画面上から登場
+      spawnPos.x, 
+      spawnPos.y,
       this.playerHouse.x, 
-      this.playerHouse.y
+      this.playerHouse.y,
+      this.mapPanels
     )
     
     console.log('👑 タココング戦開始!')
+  }
+
+  private findPathEdgePosition(): { x: number; y: number } {
+    const tileSize = 30
+    const pathPositions: { x: number; y: number }[] = []
+    const { width, height } = this.scale
+    
+    // マップの端にあるあぜ道を探す
+    for (let x = 0; x < this.mapPanels.length; x++) {
+      for (let y = 0; y < this.mapPanels[0].length; y++) {
+        const panel = this.mapPanels[x][y]
+        if (panel && panel.type === 'path') {
+          // 端にあるかチェック
+          if (x === 0 || x === this.mapPanels.length - 1 || 
+              y === 0 || y === this.mapPanels[0].length - 1) {
+            const centerTileX = Math.floor(this.mapPanels.length / 2)
+            const centerTileY = Math.floor(this.mapPanels[0].length / 2)
+            const worldX = width / 2 + (x - centerTileX) * tileSize
+            const worldY = height / 2 + (y - centerTileY) * tileSize
+            pathPositions.push({ x: worldX, y: worldY })
+          }
+        }
+      }
+    }
+    
+    // ランダムなあぜ道の端を選択
+    if (pathPositions.length > 0) {
+      return pathPositions[Math.floor(Math.random() * pathPositions.length)]
+    }
+    
+    // あぜ道の端が見つからない場合は画面端から
+    return { x: -30, y: Math.random() * height }
   }
 
   private updateScoreDisplay() {

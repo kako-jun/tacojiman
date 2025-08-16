@@ -379,7 +379,7 @@ export class EnemyManager {
     }
   }
 
-  public checkAttackHit(x: number, y: number, radius: number = 15, filter?: (enemy: Enemy) => boolean): { hit: boolean; score: number; enemy?: Enemy } {
+  public checkAttackHit(x: number, y: number, radius: number = 15, filter?: (enemy: Enemy) => boolean, zoomMultiplier: number = 1): { hit: boolean; score: number; enemy?: Enemy } {
     let totalScore = 0
     let hit = false
     let firstEnemy: Enemy | undefined = undefined
@@ -393,7 +393,7 @@ export class EnemyManager {
           continue
         }
         
-        const result = enemy.takeDamage(1)
+        const result = enemy.takeDamage(1, zoomMultiplier)
         totalScore += result.score
         hit = true
         
@@ -410,13 +410,13 @@ export class EnemyManager {
     return { hit, score: totalScore, enemy: firstEnemy }
   }
 
-  public checkBombHit(x: number, y: number, radius: number, damage: number = 1): number {
+  public checkBombHit(x: number, y: number, radius: number, damage: number = 1, zoomMultiplier: number = 1): number {
     let totalScore = 0
     
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const enemy = this.enemies[i]
       if (enemy.checkCollision(x, y, radius)) {
-        const result = enemy.takeDamage(damage)
+        const result = enemy.takeDamage(damage, zoomMultiplier)
         totalScore += result.score
         
         if (result.destroyed) {
@@ -452,8 +452,8 @@ export class EnemyManager {
       )
       
       if (distance <= houseRadius) {
-        // 敵が家に到達したとみなす
-        this.scene.events.emit('player-damaged', 10) // 10ポイント減点
+        // 敵が家に到達したとみなす - タコの基本点分を減算
+        this.scene.events.emit('player-damaged', enemy.scoreValue)
         
         // 敵を削除
         this.enemies.splice(i, 1)
@@ -463,8 +463,8 @@ export class EnemyManager {
   }
 
   private onEnemyReachedHouse(enemy: Enemy) {
-    // 敵が家に到達した時の処理
-    this.scene.events.emit('player-damaged', 10) // 10ポイント減点
+    // 敵が家に到達した時の処理 - タコの基本点分を減算
+    this.scene.events.emit('player-damaged', enemy.scoreValue)
     
     // 敵を削除
     const index = this.enemies.indexOf(enemy)
