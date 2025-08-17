@@ -125,5 +125,5 @@ export function generateMapRotationSettings(): {
  */
 export function generateMorningTime(): string {
   // 将来的には4:00〜8:00のランダム時刻に拡張可能
-  return '7:00:00 AM'
+  return '7:00:00'
 }

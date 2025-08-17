@@ -88,13 +88,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   private generateMorningTime() {
-    // 7時固定
-    this.gameStartMorningTime = `7:00:00 AM`
+    // GameConfigから取得（7時固定）
+    this.gameStartMorningTime = '7:00:00'
   }
 
   private updateMorningTime() {
     // 開始時刻から計算
-    const startTimeMatch = this.gameStartMorningTime.match(/(\d+):(\d+):(\d+) AM/)
+    const startTimeMatch = this.gameStartMorningTime.match(/(\d+):(\d+):(\d+)/)
     if (!startTimeMatch) return
     
     const startHour = parseInt(startTimeMatch[1])
@@ -113,7 +113,7 @@ export class GameScene extends Phaser.Scene {
     const totalTenthSeconds = Math.floor(elapsedMs / 100) // 100msごとのカウント
     const currentSecond = totalTenthSeconds % 60
     
-    const clockText = `${currentHour}:${currentMinute.toString().padStart(2, '0')}:${currentSecond.toString().padStart(2, '0')} AM`
+    const clockText = `${currentHour}:${currentMinute.toString().padStart(2, '0')}:${currentSecond.toString().padStart(2, '0')}`
     if (this.uiScene) {
       (this.uiScene as any).updateClock(clockText)
     }

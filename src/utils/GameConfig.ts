@@ -164,8 +164,8 @@ export const GAME_CONFIG = {
       8: 1.0
     },
     
-    DEFAULT_START_TIME: '7:00:00 AM',       // デフォルト開始時刻
-    TIME_FORMAT_REGEX: /(\d+):(\d+):(\d+) AM/, // 時刻パースパターン
+    DEFAULT_START_TIME: '7:00:00',       // デフォルト開始時刻
+    TIME_FORMAT_REGEX: /(\d+):(\d+):(\d+)/, // 時刻パースパターン
   },
 
   // ボム忍術設定

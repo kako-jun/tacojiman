@@ -109,8 +109,8 @@ export class EndingScene extends Phaser.Scene {
         break
       default:
         endingTitle = 'バッドエンド'
-        endingMessage = '幼馴染が去っていく'
-        characterReaction = '「もう来ない...」'
+        endingMessage = ''
+        characterReaction = '「...」'
     }
 
     // エンディングタイトル
@@ -188,10 +188,10 @@ export class EndingScene extends Phaser.Scene {
       fontFamily: 'monospace'
     }).setOrigin(0.5)
 
-    // スクリーンショットを小さなサムネイルとして横並びで表示
-    const thumbnailWidth = 80
-    const thumbnailHeight = 60
-    const spacing = 90
+    // スクリーンショットを縦長のまま横並びで表示（アスペクト比維持）
+    const thumbnailHeight = 100  // 高さを基準に
+    const thumbnailWidth = thumbnailHeight * 0.75  // 縦長比率（3:4）
+    const spacing = thumbnailWidth + 10
     const startX = width / 2 - (this.screenshots.length - 1) * spacing / 2
 
     this.screenshots.forEach((screenshotData, index) => {

@@ -20,7 +20,7 @@ export interface TimeProgress {
  * 開始時刻文字列をパース
  */
 export function parseStartTime(startTimeString: string): { hour: number; minute: number; second: number } {
-  const match = startTimeString.match(/(\d+):(\d+):(\d+) AM/)
+  const match = startTimeString.match(/(\d+):(\d+):(\d+)/)
   if (!match) {
     throw new Error(`Invalid time format: ${startTimeString}`)
   }
@@ -72,7 +72,7 @@ export function calculateGameTime(
  * 時刻を表示用フォーマットに変換
  */
 export function formatGameTime(hour: number, minute: number, second: number): string {
-  return `${hour}:${minute.toString().padStart(2, '0')}:${second.toString().padStart(2, '0')} AM`
+  return `${hour}:${minute.toString().padStart(2, '0')}:${second.toString().padStart(2, '0')}`
 }
 
 /**
