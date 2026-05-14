@@ -8,6 +8,7 @@
 蜂の忍術使いの末裔であるプレイヤーが、布団の中から敵を迎撃します。
 
 ### 特徴
+
 - **ワンタップ操作**: 画面タップのみのシンプル操作
 - **3分間勝負**: 電車の駅間で楽しめる短時間プレイ
 - **戦略的ズームシステム**: ズームイン・アウトによる戦略的ゲームプレイ
@@ -21,15 +22,23 @@
 
 ## 🚀 技術スタック
 
-- **ゲームエンジン**: Phaser 4 (TypeScript)
-- **アセット**: SFC風ドット絵（WebP形式）
+- **描画エンジン**: PixiJS v8 (TypeScript)
+- **ビルド**: Vite v8
+- **テスト**: Vitest v4
+- **アセット**: 開発中は `PIXI.Graphics`、最終版は SFC風ドット絵（WebP形式）
 - **プラットフォーム**: Web（itch.io + Steam）
 
 ## 📁 プロジェクト構造
 
 ```
 tacojiman/
-├── src/              # ソースコード
+├── src/
+│   ├── constants/    # 色・表示定数
+│   ├── game/         # PixiJS非依存のゲームロジック
+│   ├── scenes/       # PixiJS Container ベースのシーン
+│   └── types/        # GameState などのシリアライズ可能な型
+├── legacy/
+│   └── phaser-src/   # PixiJS移植前の Phaser 実装（参照用）
 ├── assets/           # ゲームアセット
 ├── .claude/          # Claude Code設定
 ├── CLAUDE.md         # 詳細仕様書
@@ -50,7 +59,16 @@ npm run build
 
 # テスト実行
 npm test
+
+# 型・lint・format確認
+npm run typecheck
+npm run lint
+npm run format:check
 ```
+
+## 🧱 PixiJS移植方針
+
+`GameState` はプレーンなオブジェクトとして定義し、`GameScene.initWithState(state)` で任意局面から起動できる構成にしています。これにより、今後の敵AI・ボム忍術・カメラ・UI実装でも「状態生成 → PixiJS描画」の流れを保ち、デバッグとテストを容易にします。
 
 ## 📖 詳細仕様
 

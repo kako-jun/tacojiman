@@ -1,70 +1,48 @@
-import Phaser from 'phaser'
-import { DEFAULT_GAME_CONFIG } from '@/utils/config'
-
-// シーンのインポート
-import { TitleScene } from './scenes/TitleScene'
+import { Application } from 'pixi.js'
+import {
+  createInitialGameState,
+  VIEW_HEIGHT,
+  VIEW_WIDTH,
+} from './types/GameState'
+import { COLORS } from './constants/colors'
 import { GameScene } from './scenes/GameScene'
-import { EndingScene } from './scenes/EndingScene'
-import { UIScene } from './scenes/UIScene'
+import { SceneManager } from './scenes/SceneManager'
+import { TitleScene } from './scenes/TitleScene'
+import './index.css'
 
-class Game extends Phaser.Game {
-  constructor() {
-    const config: Phaser.Types.Core.GameConfig = {
-      type: Phaser.AUTO,
-      width: DEFAULT_GAME_CONFIG.width,
-      height: DEFAULT_GAME_CONFIG.height,
-      parent: 'game-container',
-      backgroundColor: '#000000',
-      scale: {
-        mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH,
-        orientation: Phaser.Scale.PORTRAIT
-      },
-      physics: {
-        default: 'arcade',
-        arcade: {
-          gravity: { y: 0 },
-          debug: import.meta.env.DEV
-        }
-      },
-      scene: [
-        TitleScene,
-        GameScene,
-        EndingScene,
-        UIScene
-      ],
-      input: {
-        touch: true
-      },
-      render: {
-        pixelArt: true,
-        antialias: false,
-        powerPreference: 'high-performance',
-        mipmapFilter: 'LINEAR_MIPMAP_LINEAR',
-        roundPixels: true
-      }
-    }
-
-    super(config)
-    
-    // 開発用のデバッグ情報
-    if (import.meta.env.DEV) {
-      console.log('🎮 tacojiman ゲーム開始')
-      console.log('設定:', DEFAULT_GAME_CONFIG)
-    }
+async function bootstrap(): Promise<void> {
+  const root = document.getElementById('root')
+  if (root === null) {
+    throw new Error('Mount element #root not found in index.html')
   }
+
+  const app = new Application()
+  await app.init({
+    width: VIEW_WIDTH,
+    height: VIEW_HEIGHT,
+    background: COLORS.background,
+    resolution: window.devicePixelRatio,
+    autoDensity: true,
+    antialias: false,
+  })
+  root.appendChild(app.canvas)
+
+  const sceneManager = new SceneManager()
+  app.stage.addChild(sceneManager.world)
+
+  const gameScene = new GameScene()
+  const titleScene = new TitleScene(() => {
+    gameScene.initWithState(createInitialGameState())
+    sceneManager.show('game')
+  })
+
+  sceneManager.registerScene('title', titleScene)
+  sceneManager.registerScene('game', gameScene)
+  sceneManager.show('title')
+
+  app.ticker.add((ticker) => {
+    gameScene.update(ticker)
+  })
 }
 
-// DOM読み込み完了後にゲーム開始
-document.addEventListener('DOMContentLoaded', () => {
-  // ローディング画面を隠す
-  const loadingElement = document.getElementById('loading')
-  if (loadingElement) {
-    loadingElement.style.display = 'none'
-  }
-
-  // ゲーム開始
-  new Game()
-})
-
-export default Game
+void bootstrap()

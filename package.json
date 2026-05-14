@@ -2,19 +2,23 @@
   "name": "tacojiman",
   "version": "0.1.0",
   "description": "朝の蛸島駅で繰り広げられる3分間の忍術バトルゲーム",
-  "main": "src/main.ts",
+  "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "vitest",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"src/**/*.{ts,css}\" README.md CLAUDE.md .claude/tasks.md \"docs/**/*.md\"",
+    "format:check": "prettier --check \"src/**/*.{ts,css}\" README.md CLAUDE.md .claude/tasks.md \"docs/**/*.md\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "game",
-    "phaser",
+    "pixijs",
     "typescript",
     "pixel-art",
     "action",
@@ -24,18 +28,20 @@
   "author": "kako-jun",
   "license": "MIT",
   "devDependencies": {
-    "@types/js-yaml": "^4.0.8",
-    "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0",
-    "eslint": "^8.45.0",
-    "typescript": "^5.0.2",
-    "vite": "^5.0.0",
-    "vitest": "^1.0.0"
+    "@eslint/js": "^10.0.1",
+    "@typescript-eslint/eslint-plugin": "^8.59.3",
+    "@typescript-eslint/parser": "^8.59.3",
+    "eslint": "^10.3.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.3",
+    "vite": "^8.0.13",
+    "vitest": "^4.1.6"
   },
   "dependencies": {
-    "phaser": "^3.70.0",
-    "zod": "^3.22.0",
-    "js-yaml": "^4.1.0"
+    "pixi.js": "^8.18.1"
   },
   "repository": {
     "type": "git",
