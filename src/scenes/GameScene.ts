@@ -169,6 +169,16 @@ export class GameScene extends Container {
     }
 
     this.advanceEnemies(ticker.deltaMS)
+
+    // takokong が消えたらズームリセット
+    if (state.takokongSpawned && !state.enemies.some(e => e.type === 'takokong')) {
+      if (state.zoomState !== null || state.camera.scale !== 1) {
+        state.zoomState = null
+        state.camera.scale = 1
+        this.mapLayer.scale.set(1)
+      }
+    }
+
     this.drawEnemies()
     this.drawUi()
     this.tryMovePlayer()

@@ -1,4 +1,5 @@
 import { generateMap } from '../game/map'
+import type { ShakeState, ZoomState } from '../game/CameraController'
 
 export type PanelType =
   | 'water'
@@ -78,8 +79,8 @@ export interface GameState {
   spawnTimer: number
   phase: 'ready' | 'playing' | 'ending'
   player: PlayerState
-  shakeState: { remainingMs: number; intensity: number }
-  zoomState: { targetScale: number; durationMs: number; elapsedMs: number } | null
+  shakeState: ShakeState
+  zoomState: ZoomState | null
 }
 
 export const VIEW_WIDTH = 400
