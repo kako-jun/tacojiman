@@ -251,4 +251,20 @@ describe('実際のマップでの統合確認', () => {
     expect(result.length).toBeGreaterThan(0)
     expect(result[result.length - 1]).toEqual(goal)
   })
+
+  it('generateMap で生成した実マップの path から player_house まで経路が見つかる', () => {
+    const map = generateMap(19, 25)
+
+    // player_house は map[9][12]
+    // path パネルから player_house まで経路が見つかることを確認
+    const start = { x: 9, y: 5 }  // x=9（centerX）は path
+    const goal = { x: 9, y: 12 }  // player_house
+
+    expect(map[goal.x][goal.y].type).toBe('player_house')
+    expect(map[goal.x][goal.y].connections.north).toBe(true)
+
+    const result = findPath(map, start, goal)
+    expect(result.length).toBeGreaterThan(0)
+    expect(result[result.length - 1]).toEqual(goal)
+  })
 })

@@ -27,10 +27,15 @@ export function findPath(
   const cameFrom = new Map<string, { x: number; y: number }>()
   const gScore = new Map<string, number>()
   gScore.set(key(start.x, start.y), 0)
+  const closedSet = new Set<string>()
 
   while (openSet.length > 0) {
     openSet.sort((a, b) => a.f - b.f)
     const current = openSet.shift()!
+    const currentKey = key(current.x, current.y)
+
+    if (closedSet.has(currentKey)) continue
+    closedSet.add(currentKey)
 
     if (current.x === goal.x && current.y === goal.y) {
       const path: Array<{ x: number; y: number }> = []
@@ -131,7 +136,7 @@ function getConnections(
 }
 
 function isConnectable(type: PanelType): boolean {
-  return type === 'path' || type === 'rail' || type === 'station'
+  return type === 'path' || type === 'rail' || type === 'station' || type === 'player_house'
 }
 
 function isSameNetwork(
@@ -142,5 +147,8 @@ function isSameNetwork(
   if (current === 'rail' || current === 'station') {
     return other === 'rail' || other === 'station'
   }
+  // path と player_house は同一ネットワーク
+  const pathNetwork = new Set<PanelType>(['path', 'player_house'])
+  if (pathNetwork.has(current)) return pathNetwork.has(other)
   return other === current
 }
