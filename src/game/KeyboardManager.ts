@@ -29,10 +29,26 @@ export class KeyboardManager {
   }
 
   getDirection(): Direction | null {
-    if (this.isPressed('ArrowUp') || this.isPressed('w') || this.isPressed('W')) return 'north'
-    if (this.isPressed('ArrowDown') || this.isPressed('s') || this.isPressed('S')) return 'south'
-    if (this.isPressed('ArrowLeft') || this.isPressed('a') || this.isPressed('A')) return 'west'
-    if (this.isPressed('ArrowRight') || this.isPressed('d') || this.isPressed('D')) return 'east'
+    if (this.isPressed('ArrowUp') || this.isPressed('w') || this.isPressed('W'))
+      return 'north'
+    if (
+      this.isPressed('ArrowDown') ||
+      this.isPressed('s') ||
+      this.isPressed('S')
+    )
+      return 'south'
+    if (
+      this.isPressed('ArrowLeft') ||
+      this.isPressed('a') ||
+      this.isPressed('A')
+    )
+      return 'west'
+    if (
+      this.isPressed('ArrowRight') ||
+      this.isPressed('d') ||
+      this.isPressed('D')
+    )
+      return 'east'
     return null
   }
 

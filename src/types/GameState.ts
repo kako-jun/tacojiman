@@ -40,6 +40,7 @@ export interface EnemyState {
   id: string
   type: EnemyType
   hp: number
+  speed: number
   x: number
   y: number
   routeProgress: number
@@ -74,6 +75,7 @@ export interface GameState {
   enemies: EnemyState[]
   camera: CameraState
   takokongSpawned: boolean
+  spawnTimer: number
   phase: 'ready' | 'playing' | 'ending'
   player: PlayerState
 }
@@ -93,21 +95,10 @@ export function createInitialGameState(): GameState {
     selectedBomb: null,
     morningStartMinutes: 7 * 60,
     map: generateMap(19, 25),
-    enemies: [
-      {
-        id: 'ground-1',
-        type: 'ground',
-        hp: 2,
-        x: 0,
-        y: -196,
-        routeProgress: 0,
-        route: [],
-      },
-      { id: 'water-1', type: 'water', hp: 2, x: -84, y: -196, routeProgress: 0, route: [] },
-      { id: 'air-1', type: 'air', hp: 1, x: 0, y: 224, routeProgress: 0, route: [] },
-    ],
+    enemies: [],
     camera: { x: VIEW_WIDTH / 2, y: VIEW_HEIGHT / 2, scale: 1 },
     takokongSpawned: false,
+    spawnTimer: 0,
     phase: 'ready',
     player: {
       panelX: 9,

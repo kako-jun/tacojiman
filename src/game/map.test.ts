@@ -21,12 +21,23 @@ describe('generateMap', () => {
 })
 
 // helpers
-function p(x: number, y: number, type: MapPanel['type'], connections: Partial<MapPanel['connections']> = {}): MapPanel {
+function p(
+  x: number,
+  y: number,
+  type: MapPanel['type'],
+  connections: Partial<MapPanel['connections']> = {}
+): MapPanel {
   return {
     x,
     y,
     type,
-    connections: { north: false, south: false, east: false, west: false, ...connections },
+    connections: {
+      north: false,
+      south: false,
+      east: false,
+      west: false,
+      ...connections,
+    },
   }
 }
 
@@ -40,18 +51,27 @@ describe('findPath — 正常系', () => {
     ]
     const result = findPath(map, { x: 0, y: 0 }, { x: 2, y: 0 })
 
-    expect(result).toEqual([{ x: 1, y: 0 }, { x: 2, y: 0 }])
+    expect(result).toEqual([
+      { x: 1, y: 0 },
+      { x: 2, y: 0 },
+    ])
   })
 
   it('L字経路が取得できる（折れ曲がった経路を正しく返すこと）', () => {
     // (0,0) east-> (1,0) south-> (1,1)
     const map: MapPanel[][] = [
       [p(0, 0, 'path', { east: true }), p(0, 1, 'river')],
-      [p(1, 0, 'path', { west: true, south: true }), p(1, 1, 'path', { north: true })],
+      [
+        p(1, 0, 'path', { west: true, south: true }),
+        p(1, 1, 'path', { north: true }),
+      ],
     ]
     const result = findPath(map, { x: 0, y: 0 }, { x: 1, y: 1 })
 
-    expect(result).toEqual([{ x: 1, y: 0 }, { x: 1, y: 1 }])
+    expect(result).toEqual([
+      { x: 1, y: 0 },
+      { x: 1, y: 1 },
+    ])
   })
 
   it('返値に start は含まれない', () => {
@@ -76,9 +96,7 @@ describe('findPath — 正常系', () => {
   })
 
   it('start === goal のとき空配列を返す', () => {
-    const map: MapPanel[][] = [
-      [p(0, 0, 'path', {})],
-    ]
+    const map: MapPanel[][] = [[p(0, 0, 'path', {})]]
     const result = findPath(map, { x: 0, y: 0 }, { x: 0, y: 0 })
 
     expect(result).toEqual([])
@@ -87,18 +105,14 @@ describe('findPath — 正常系', () => {
 
 describe('findPath — 異常系 / 境界値 / null', () => {
   it('start が map 範囲外（負座標）のとき [] を返す', () => {
-    const map: MapPanel[][] = [
-      [p(0, 0, 'path', {})],
-    ]
+    const map: MapPanel[][] = [[p(0, 0, 'path', {})]]
     const result = findPath(map, { x: -1, y: 0 }, { x: 0, y: 0 })
 
     expect(result).toEqual([])
   })
 
   it('goal が map 範囲外のとき [] を返す', () => {
-    const map: MapPanel[][] = [
-      [p(0, 0, 'path', {})],
-    ]
+    const map: MapPanel[][] = [[p(0, 0, 'path', {})]]
     const result = findPath(map, { x: 0, y: 0 }, { x: 5, y: 5 })
 
     expect(result).toEqual([])
@@ -127,9 +141,7 @@ describe('findPath — 異常系 / 境界値 / null', () => {
 
 describe('findPath — 到達不能 / 孤立', () => {
   it('接続のない孤立 start から [] を返す（connections が全 false）', () => {
-    const map: MapPanel[][] = [
-      [p(0, 0, 'path', {}), p(0, 1, 'path', {})],
-    ]
+    const map: MapPanel[][] = [[p(0, 0, 'path', {}), p(0, 1, 'path', {})]]
     const result = findPath(map, { x: 0, y: 0 }, { x: 0, y: 1 })
 
     expect(result).toEqual([])
@@ -401,7 +413,9 @@ describe('PlayerState 初期化', () => {
   it('player の初期位置 (9, 12) が player_house パネルであること', () => {
     const state = createInitialGameState()
 
-    expect(state.map[state.player.panelX][state.player.panelY].type).toBe('player_house')
+    expect(state.map[state.player.panelX][state.player.panelY].type).toBe(
+      'player_house'
+    )
   })
 
   it('player_house が east 方向の隣接 path と接続していること', () => {
@@ -409,7 +423,9 @@ describe('PlayerState 初期化', () => {
 
     // map[10][12] は centerY 行の path（east 隣接）
     expect(state.map[10][12].type).toBe('path')
-    expect(state.map[state.player.panelX][state.player.panelY].connections.east).toBe(true)
+    expect(
+      state.map[state.player.panelX][state.player.panelY].connections.east
+    ).toBe(true)
   })
 
   it('player_house が west 方向の隣接 path と接続していること', () => {
@@ -417,7 +433,9 @@ describe('PlayerState 初期化', () => {
 
     // map[8][12] は centerY 行の path（west 隣接）
     expect(state.map[8][12].type).toBe('path')
-    expect(state.map[state.player.panelX][state.player.panelY].connections.west).toBe(true)
+    expect(
+      state.map[state.player.panelX][state.player.panelY].connections.west
+    ).toBe(true)
   })
 })
 
@@ -456,8 +474,8 @@ describe('実際のマップでの統合確認', () => {
 
     // player_house は map[9][12]
     // path パネルから player_house まで経路が見つかることを確認
-    const start = { x: 9, y: 5 }  // x=9（centerX）は path
-    const goal = { x: 9, y: 12 }  // player_house
+    const start = { x: 9, y: 5 } // x=9（centerX）は path
+    const goal = { x: 9, y: 12 } // player_house
 
     expect(map[goal.x][goal.y].type).toBe('player_house')
     expect(map[goal.x][goal.y].connections.north).toBe(true)

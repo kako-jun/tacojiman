@@ -13,6 +13,7 @@ import {
 } from '../types/GameState'
 import { findPath } from '../game/map'
 import { KeyboardManager } from '../game/KeyboardManager'
+import { spawnEnemies } from '../game/EnemyManager'
 
 export class GameScene extends Container {
   private state: GameState | null = null
@@ -90,7 +91,11 @@ export class GameScene extends Container {
         // enemy.x/y は mapLayer ローカル座標（offsetX/offsetY ベース）
         const startX = Math.round((enemy.x - offsetX) / TILE_SIZE)
         const startY = Math.round((enemy.y - offsetY) / TILE_SIZE)
-        const route = findPath(map, { x: startX, y: startY }, { x: goalPanel.x, y: goalPanel.y })
+        const route = findPath(
+          map,
+          { x: startX, y: startY },
+          { x: goalPanel.x, y: goalPanel.y }
+        )
         enemy.route = route
       }
     }
@@ -109,6 +114,30 @@ export class GameScene extends Container {
       this.state.elapsedMs + ticker.deltaMS
     )
     this.mapLayer.rotation += 0.00005 * ticker.deltaMS
+
+    // スポーン
+    const map = this.state.map
+    const width = map.length * TILE_SIZE
+    const height = map[0].length * TILE_SIZE
+    const offsetX = -width / 2
+    const offsetY = -height / 2
+    const goalPanel = map.flat().find((p) => p.type === 'player_house')
+    const newEnemies = spawnEnemies(this.state, ticker.deltaMS)
+    for (const e of newEnemies) {
+      if (goalPanel) {
+        const startX = Math.round((e.x - offsetX) / TILE_SIZE)
+        const startY = Math.round((e.y - offsetY) / TILE_SIZE)
+        const route = findPath(
+          map,
+          { x: startX, y: startY },
+          { x: goalPanel.x, y: goalPanel.y }
+        )
+        e.route =
+          route.length > 0 ? route : [{ x: goalPanel.x, y: goalPanel.y }]
+      }
+      this.state.enemies.push(e)
+    }
+
     this.advanceEnemies(ticker.deltaMS)
     this.drawEnemies()
     this.drawUi()
@@ -147,10 +176,26 @@ export class GameScene extends Container {
 
         if (panel.type === 'path') {
           // 接続方向への道路線（幅 8px）
-          this.drawConnectionLines(cx, cy, x, y, panel.connections, 8, COLORS.pathLine)
+          this.drawConnectionLines(
+            cx,
+            cy,
+            x,
+            y,
+            panel.connections,
+            8,
+            COLORS.pathLine
+          )
         } else if (panel.type === 'rail') {
           // 接続方向への線路線（幅 6px）
-          this.drawConnectionLines(cx, cy, x, y, panel.connections, 6, COLORS.railLine)
+          this.drawConnectionLines(
+            cx,
+            cy,
+            x,
+            y,
+            panel.connections,
+            6,
+            COLORS.railLine
+          )
           // 枕木（4px × 10px を中心付近に 3 本）
           const sleeperOffsets = [-6, 0, 6]
           for (const off of sleeperOffsets) {
@@ -159,7 +204,15 @@ export class GameScene extends Container {
           }
         } else if (panel.type === 'station') {
           // 接続方向への線（rail と同色・同幅）
-          this.drawConnectionLines(cx, cy, x, y, panel.connections, 6, COLORS.railLine)
+          this.drawConnectionLines(
+            cx,
+            cy,
+            x,
+            y,
+            panel.connections,
+            6,
+            COLORS.railLine
+          )
           // プラットフォーム矩形（中央寄り 70%）
           const platformW = (TILE_SIZE - 1) * 0.7
           const platformH = (TILE_SIZE - 1) * 0.7
@@ -196,12 +249,7 @@ export class GameScene extends Container {
           // 屋根風の内側矩形
           const roofW = (TILE_SIZE - 1) * 0.6
           const roofH = (TILE_SIZE - 1) * 0.35
-          this.mapGraphics.rect(
-            cx - roofW / 2,
-            y + 3,
-            roofW,
-            roofH
-          )
+          this.mapGraphics.rect(cx - roofW / 2, y + 3, roofW, roofH)
           this.mapGraphics.fill(COLORS.otherHouseRoof)
         }
       }
@@ -246,20 +294,60 @@ export class GameScene extends Container {
 
   private drawEnemy(enemy: EnemyState): void {
     const color = enemy.hp > 1 ? COLORS.enemyHp2 : COLORS.enemyHp1
-    const radius = enemy.type === 'takokong' ? 22 : 11
-    this.enemyGraphics.circle(enemy.x, enemy.y, radius)
-    this.enemyGraphics.fill(color)
-    this.enemyGraphics.circle(
-      enemy.x - radius * 0.35,
-      enemy.y - radius * 0.2,
-      2
-    )
-    this.enemyGraphics.circle(
-      enemy.x + radius * 0.35,
-      enemy.y - radius * 0.2,
-      2
-    )
-    this.enemyGraphics.fill(0xffffff)
+    const { x, y } = enemy
+
+    if (enemy.type === 'ground') {
+      // 矩形 (hp2:24x24, hp1:20x20)
+      const size = enemy.hp > 1 ? 24 : 20
+      this.enemyGraphics.rect(x - size / 2, y - size / 2, size, size)
+      this.enemyGraphics.fill(color)
+      this.enemyGraphics.stroke({ color: 0xffffff, width: 2 })
+    } else if (enemy.type === 'water') {
+      // 円 (hp2:radius=13, hp1:radius=10)
+      const radius = enemy.hp > 1 ? 13 : 10
+      this.enemyGraphics.circle(x, y, radius)
+      this.enemyGraphics.fill(color)
+      this.enemyGraphics.stroke({ color: 0xffffff, width: 2 })
+    } else if (enemy.type === 'air') {
+      // 三角形
+      const size = enemy.hp > 1 ? 14 : 11
+      this.enemyGraphics.poly([
+        x,
+        y - size,
+        x + size,
+        y + size,
+        x - size,
+        y + size,
+      ])
+      this.enemyGraphics.fill(color)
+      this.enemyGraphics.stroke({ color: 0xffffff, width: 2 })
+    } else if (enemy.type === 'underground') {
+      // 菱形
+      const size = enemy.hp > 1 ? 14 : 11
+      this.enemyGraphics.poly([
+        x,
+        y - size,
+        x + size,
+        y,
+        x,
+        y + size,
+        x - size,
+        y,
+      ])
+      this.enemyGraphics.fill(color)
+      this.enemyGraphics.stroke({ color: 0xffffff, width: 2 })
+    } else {
+      // takokong: 大円 radius=22 + 白縁 + 紫オーラ円 radius=28
+      const prevAlpha = this.enemyGraphics.alpha
+      this.enemyGraphics.alpha = 0.4
+      this.enemyGraphics.circle(x, y, 28)
+      this.enemyGraphics.fill(0x9900cc)
+      this.enemyGraphics.alpha = prevAlpha
+      this.enemyGraphics.circle(x, y, 22)
+      this.enemyGraphics.fill(color)
+      this.enemyGraphics.circle(x, y, 22)
+      this.enemyGraphics.stroke({ color: 0xffffff, width: 3 })
+    }
   }
 
   private drawUi(): void {
@@ -276,9 +364,14 @@ export class GameScene extends Container {
     const offsetX = -width / 2
     const offsetY = -height / 2
 
-    for (const enemy of state.enemies) {
+    for (let i = state.enemies.length - 1; i >= 0; i--) {
+      const enemy = state.enemies[i]
       if (enemy.route.length > 0) {
-        enemy.routeProgress = Math.min(1, enemy.routeProgress + deltaMS / 18_000)
+        enemy.routeProgress = Math.min(
+          1,
+          enemy.routeProgress +
+            (deltaMS * enemy.speed) / 1000 / enemy.route.length
+        )
         const t = enemy.routeProgress * enemy.route.length
         const segIndex = Math.min(Math.floor(t), enemy.route.length - 1)
         const segT = t - segIndex
@@ -299,11 +392,25 @@ export class GameScene extends Container {
           enemy.y = from.py + (to.py - from.py) * segT
         }
       } else {
-        // フォールバック: mapLayer 中心（0,0）へ引き寄せ
-        enemy.routeProgress += deltaMS / 18_000
-        const t = Math.min(1, enemy.routeProgress)
-        enemy.x += (0 - enemy.x) * t * 0.002
-        enemy.y += (0 - enemy.y) * t * 0.002
+        // air: 左から右へ直線移動
+        if (enemy.type === 'air') {
+          enemy.x += enemy.speed * deltaMS * 0.08
+          const rightEdge = width / 2 + 200
+          if (enemy.x > rightEdge) {
+            state.enemies.splice(i, 1)
+          }
+        }
+        // takokong: player_house に向かって直進（x=0, y=0 つまり mapLayer 中心）
+        else if (enemy.type === 'takokong') {
+          const dx = 0 - enemy.x
+          const dy = 0 - enemy.y
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          if (dist > 1) {
+            const norm = (enemy.speed * deltaMS * 0.05) / dist
+            enemy.x += dx * norm
+            enemy.y += dy * norm
+          }
+        }
       }
     }
   }
@@ -320,7 +427,10 @@ export class GameScene extends Container {
     return this.state
   }
 
-  private panelToPixel(panelX: number, panelY: number): { x: number; y: number } {
+  private panelToPixel(
+    panelX: number,
+    panelY: number
+  ): { x: number; y: number } {
     const width = this.state!.map.length * TILE_SIZE
     const height = this.state!.map[0].length * TILE_SIZE
     const offsetX = -width / 2

@@ -6,7 +6,10 @@ function isWalkable(type: PanelType): boolean {
   return WALKABLE.includes(type)
 }
 
-function heuristic(a: { x: number; y: number }, b: { x: number; y: number }): number {
+function heuristic(
+  a: { x: number; y: number },
+  b: { x: number; y: number }
+): number {
   return Math.abs(a.x - b.x) + Math.abs(a.y - b.y)
 }
 
@@ -23,7 +26,9 @@ export function findPath(
   type Node = { x: number; y: number; f: number }
   const key = (x: number, y: number) => `${x},${y}`
 
-  const openSet: Node[] = [{ x: start.x, y: start.y, f: heuristic(start, goal) }]
+  const openSet: Node[] = [
+    { x: start.x, y: start.y, f: heuristic(start, goal) },
+  ]
   const cameFrom = new Map<string, { x: number; y: number }>()
   const gScore = new Map<string, number>()
   gScore.set(key(start.x, start.y), 0)
@@ -51,10 +56,14 @@ export function findPath(
     if (!panel) continue
 
     const neighbors: Array<{ x: number; y: number }> = []
-    if (panel.connections.north) neighbors.push({ x: current.x, y: current.y - 1 })
-    if (panel.connections.south) neighbors.push({ x: current.x, y: current.y + 1 })
-    if (panel.connections.east) neighbors.push({ x: current.x + 1, y: current.y })
-    if (panel.connections.west) neighbors.push({ x: current.x - 1, y: current.y })
+    if (panel.connections.north)
+      neighbors.push({ x: current.x, y: current.y - 1 })
+    if (panel.connections.south)
+      neighbors.push({ x: current.x, y: current.y + 1 })
+    if (panel.connections.east)
+      neighbors.push({ x: current.x + 1, y: current.y })
+    if (panel.connections.west)
+      neighbors.push({ x: current.x - 1, y: current.y })
 
     for (const neighbor of neighbors) {
       const neighborPanel = map[neighbor.x]?.[neighbor.y]
@@ -136,7 +145,12 @@ function getConnections(
 }
 
 function isConnectable(type: PanelType): boolean {
-  return type === 'path' || type === 'rail' || type === 'station' || type === 'player_house'
+  return (
+    type === 'path' ||
+    type === 'rail' ||
+    type === 'station' ||
+    type === 'player_house'
+  )
 }
 
 const PATH_NETWORK = new Set<PanelType>(['path', 'player_house'])
