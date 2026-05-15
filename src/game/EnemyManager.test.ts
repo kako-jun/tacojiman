@@ -28,6 +28,7 @@ function makeMinimalState(overrides: Partial<GameState> = {}): GameState {
     player: { panelX: 0, panelY: 0, direction: 'south', isMoving: false },
     shakeState: { remainingMs: 0, intensity: 0 },
     zoomState: null,
+    playerHp: 3,
     ...overrides,
   }
 }
