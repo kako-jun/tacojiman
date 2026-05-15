@@ -49,8 +49,10 @@ export class GameScene extends Container {
     super()
     this.mapLayer.addChild(this.mapGraphics)
     this.enemyLayer.addChild(this.enemyGraphics)
+    // playerLayer は mapLayer の子にして自動回転に追従させる
     this.playerLayer.addChild(this.playerGraphics)
-    this.addChild(this.mapLayer, this.enemyLayer, this.playerLayer, this.uiLayer)
+    this.mapLayer.addChild(this.playerLayer)
+    this.addChild(this.mapLayer, this.enemyLayer, this.uiLayer)
     this.clockText.x = 14
     this.clockText.y = 12
     this.scoreText.anchor.set(1, 0)
@@ -68,8 +70,7 @@ export class GameScene extends Container {
     const height = map[0].length * TILE_SIZE
     this.enemyLayer.x = VIEW_WIDTH / 2
     this.enemyLayer.y = VIEW_HEIGHT / 2
-    this.playerLayer.x = VIEW_WIDTH / 2
-    this.playerLayer.y = VIEW_HEIGHT / 2
+    // playerLayer は mapLayer の子のためオフセット設定不要
 
     // KeyboardManager を生成
     this.keyboard = new KeyboardManager()
@@ -306,6 +307,11 @@ export class GameScene extends Container {
         enemy.y += (VIEW_HEIGHT / 2 - enemy.y) * t * 0.002
       }
     }
+  }
+
+  override destroy(): void {
+    this.keyboard?.destroy()
+    super.destroy()
   }
 
   private requireState(): GameState {
