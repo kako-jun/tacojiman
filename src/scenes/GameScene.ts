@@ -16,6 +16,7 @@ import { findPath } from '../game/map'
 import { KeyboardManager } from '../game/KeyboardManager'
 import { spawnEnemies } from '../game/EnemyManager'
 import { applyBombDamage } from '../game/BombJutsu'
+import { calcShakeOffset, applyZoom } from '../game/CameraController'
 
 export class GameScene extends Container {
   private state: GameState | null = null
@@ -142,7 +143,42 @@ export class GameScene extends Container {
       this.state.enemies.push(e)
     }
 
+    // 新しくスポーンした敵の中に takokong があればズームイン
+    for (const e of newEnemies) {
+      if (e.type === 'takokong') {
+        this.state.zoomState = { targetScale: 1.5, durationMs: 1000, elapsedMs: 0 }
+      }
+    }
+
+    // シェイク適用
+    const state = this.state
+    const { dx, dy, nextShake } = calcShakeOffset(state.shakeState, ticker.deltaMS)
+    state.shakeState = nextShake
+    this.mapLayer.x = VIEW_WIDTH / 2 + dx
+    this.mapLayer.y = VIEW_HEIGHT / 2 + dy
+
+    // ズーム適用
+    if (state.zoomState) {
+      state.zoomState.elapsedMs += ticker.deltaMS
+      const t = Math.min(1, state.zoomState.elapsedMs / state.zoomState.durationMs)
+      state.camera = applyZoom(state.camera, state.zoomState.targetScale, t)
+      this.mapLayer.scale.set(state.camera.scale)
+      if (t >= 1) {
+        state.zoomState = null
+      }
+    }
+
     this.advanceEnemies(ticker.deltaMS)
+
+    // takokong が消えたらズームリセット
+    if (state.takokongSpawned && !state.enemies.some(e => e.type === 'takokong')) {
+      if (state.zoomState !== null || state.camera.scale !== 1) {
+        state.zoomState = null
+        state.camera.scale = 1
+        this.mapLayer.scale.set(1)
+      }
+    }
+
     this.drawEnemies()
     this.drawUi()
     this.tryMovePlayer()
@@ -504,6 +540,21 @@ export class GameScene extends Container {
     const state = this.requireState()
     // ダメージ計算（muddy/sentry/bunshin はダメージなし）
     applyBombDamage(state, type)
+    // シェイクトリガー
+    switch (type) {
+      case 'muteki':
+      case 'sol':
+      case 'jakuhou':
+        state.shakeState = { remainingMs: 500, intensity: 8 }
+        break
+      case 'proton':
+      case 'dainsleif':
+        state.shakeState = { remainingMs: 300, intensity: 5 }
+        break
+      default:
+        // muddy / sentry / bunshin: シェイクなし
+        break
+    }
     // エフェクト描画
     switch (type) {
       case 'proton':

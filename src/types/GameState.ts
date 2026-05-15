@@ -1,4 +1,5 @@
 import { generateMap } from '../game/map'
+import type { ShakeState, ZoomState } from '../game/CameraController'
 
 export type PanelType =
   | 'water'
@@ -78,6 +79,8 @@ export interface GameState {
   spawnTimer: number
   phase: 'ready' | 'playing' | 'ending'
   player: PlayerState
+  shakeState: ShakeState
+  zoomState: ZoomState | null
 }
 
 export const VIEW_WIDTH = 400
@@ -97,6 +100,8 @@ export function createInitialGameState(): GameState {
     map: generateMap(19, 25),
     enemies: [],
     camera: { x: VIEW_WIDTH / 2, y: VIEW_HEIGHT / 2, scale: 1 },
+    shakeState: { remainingMs: 0, intensity: 0 },
+    zoomState: null,
     takokongSpawned: false,
     spawnTimer: 0,
     phase: 'ready',
