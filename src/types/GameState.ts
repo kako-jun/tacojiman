@@ -78,6 +78,8 @@ export interface GameState {
   spawnTimer: number
   phase: 'ready' | 'playing' | 'ending'
   player: PlayerState
+  shakeState: { remainingMs: number; intensity: number }
+  zoomState: { targetScale: number; durationMs: number; elapsedMs: number } | null
 }
 
 export const VIEW_WIDTH = 400
@@ -97,6 +99,8 @@ export function createInitialGameState(): GameState {
     map: generateMap(19, 25),
     enemies: [],
     camera: { x: VIEW_WIDTH / 2, y: VIEW_HEIGHT / 2, scale: 1 },
+    shakeState: { remainingMs: 0, intensity: 0 },
+    zoomState: null,
     takokongSpawned: false,
     spawnTimer: 0,
     phase: 'ready',
