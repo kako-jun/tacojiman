@@ -17,6 +17,8 @@ import { KeyboardManager } from '../game/KeyboardManager'
 import { spawnEnemies } from '../game/EnemyManager'
 import { applyBombDamage } from '../game/BombJutsu'
 import { calcShakeOffset, applyZoom } from '../game/CameraController'
+import { GameEventEmitter } from '../game/GameEvents'
+import { EffectManager } from './EffectManager'
 
 export class GameScene extends Container {
   private state: GameState | null = null
@@ -29,6 +31,8 @@ export class GameScene extends Container {
   private readonly enemyGraphics = new Graphics()
   private readonly playerGraphics = new Graphics()
   private keyboard: KeyboardManager | null = null
+  private readonly events = new GameEventEmitter()
+  private effectManager: EffectManager | null = null
   private readonly clockText = new Text({
     text: '7:00 AM',
     style: {
@@ -79,6 +83,14 @@ export class GameScene extends Container {
 
     // KeyboardManager を生成
     this.keyboard = new KeyboardManager()
+
+    // EffectManager を生成（mapLayer の子として設定）
+    this.effectManager = new EffectManager(this.mapLayer)
+
+    // score-gain イベントのハンドラを登録
+    this.events.on('score-gain', (e) => {
+      this.effectManager?.showScoreGain(e)
+    })
 
     // プレイヤーの初期ピクセル座標を計算
     const { panelX, panelY } = this.state.player
@@ -473,6 +485,8 @@ export class GameScene extends Container {
 
   override destroy(): void {
     this.keyboard?.destroy()
+    this.effectManager?.destroy()
+    this.events.clear()
     super.destroy()
   }
 
@@ -539,7 +553,15 @@ export class GameScene extends Container {
   activateBomb(type: BombType): void {
     const state = this.requireState()
     // ダメージ計算（muddy/sentry/bunshin はダメージなし）
-    applyBombDamage(state, type)
+    const result = applyBombDamage(state, type)
+    // スコア加算と score-gain イベント emit
+    const earnedScore = result.hitResults.size
+    if (earnedScore > 0) {
+      state.score += earnedScore
+      this.events.emit('score-gain', {
+        x: 0, y: 0, score: earnedScore, combo: 1,
+      })
+    }
     // シェイクトリガー
     switch (type) {
       case 'muteki':
