@@ -48,11 +48,12 @@ export class GameScene extends Container {
   constructor() {
     super()
     this.mapLayer.addChild(this.mapGraphics)
+    // enemyLayer / playerLayer は mapLayer の子にして自動回転に追従させる
     this.enemyLayer.addChild(this.enemyGraphics)
-    // playerLayer は mapLayer の子にして自動回転に追従させる
+    this.mapLayer.addChild(this.enemyLayer)
     this.playerLayer.addChild(this.playerGraphics)
     this.mapLayer.addChild(this.playerLayer)
-    this.addChild(this.mapLayer, this.enemyLayer, this.uiLayer)
+    this.addChild(this.mapLayer, this.uiLayer)
     this.clockText.x = 14
     this.clockText.y = 12
     this.scoreText.anchor.set(1, 0)
@@ -68,9 +69,7 @@ export class GameScene extends Container {
     const map = this.state.map
     const width = map.length * TILE_SIZE
     const height = map[0].length * TILE_SIZE
-    this.enemyLayer.x = VIEW_WIDTH / 2
-    this.enemyLayer.y = VIEW_HEIGHT / 2
-    // playerLayer は mapLayer の子のためオフセット設定不要
+    // enemyLayer / playerLayer は mapLayer の子のためオフセット設定不要
 
     // KeyboardManager を生成
     this.keyboard = new KeyboardManager()
@@ -88,9 +87,9 @@ export class GameScene extends Container {
       const offsetX = -width / 2
       const offsetY = -height / 2
       for (const enemy of this.state.enemies) {
-        // ピクセル座標からpanel座標に変換
-        const startX = Math.round((enemy.x - (VIEW_WIDTH / 2) - offsetX) / TILE_SIZE)
-        const startY = Math.round((enemy.y - (VIEW_HEIGHT / 2) - offsetY) / TILE_SIZE)
+        // enemy.x/y は mapLayer ローカル座標（offsetX/offsetY ベース）
+        const startX = Math.round((enemy.x - offsetX) / TILE_SIZE)
+        const startY = Math.round((enemy.y - offsetY) / TILE_SIZE)
         const route = findPath(map, { x: startX, y: startY }, { x: goalPanel.x, y: goalPanel.y })
         enemy.route = route
       }
@@ -300,11 +299,11 @@ export class GameScene extends Container {
           enemy.y = from.py + (to.py - from.py) * segT
         }
       } else {
-        // フォールバック: 中心引き寄せ
+        // フォールバック: mapLayer 中心（0,0）へ引き寄せ
         enemy.routeProgress += deltaMS / 18_000
         const t = Math.min(1, enemy.routeProgress)
-        enemy.x += (VIEW_WIDTH / 2 - enemy.x) * t * 0.002
-        enemy.y += (VIEW_HEIGHT / 2 - enemy.y) * t * 0.002
+        enemy.x += (0 - enemy.x) * t * 0.002
+        enemy.y += (0 - enemy.y) * t * 0.002
       }
     }
   }
