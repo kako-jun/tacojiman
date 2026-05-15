@@ -559,7 +559,10 @@ export class GameScene extends Container {
     if (earnedScore > 0) {
       state.score += earnedScore
       this.events.emit('score-gain', {
-        x: 0, y: 0, score: earnedScore, combo: 1,
+        x: this.playerGraphics.x,
+        y: this.playerGraphics.y,
+        score: earnedScore,
+        combo: 1,
       })
     }
     // シェイクトリガー
