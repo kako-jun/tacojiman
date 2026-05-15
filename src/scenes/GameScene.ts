@@ -31,6 +31,7 @@ export class GameScene extends Container {
   private readonly enemyGraphics = new Graphics()
   private readonly playerGraphics = new Graphics()
   private keyboard: KeyboardManager | null = null
+  private takokongDefeated = false
   private readonly events = new GameEventEmitter()
   private effectManager: EffectManager | null = null
   private readonly clockText = new Text({
@@ -183,8 +184,10 @@ export class GameScene extends Container {
     this.advanceEnemies(ticker.deltaMS)
 
     // takokong が消えたらズームリセット
-    if (state.takokongSpawned && !state.enemies.some(e => e.type === 'takokong')) {
-      if (state.zoomState !== null || state.camera.scale !== 1) {
+    if (state.takokongSpawned && !this.takokongDefeated) {
+      if (!state.enemies.some(e => e.type === 'takokong')) {
+        // takokong が消えた（撃破または到達）
+        this.takokongDefeated = true
         state.zoomState = null
         state.camera.scale = 1
         this.mapLayer.scale.set(1)
@@ -473,7 +476,10 @@ export class GameScene extends Container {
           const dx = 0 - enemy.x
           const dy = 0 - enemy.y
           const dist = Math.sqrt(dx * dx + dy * dy)
-          if (dist > 1) {
+          if (dist <= 1) {
+            // player_house 到達 → 除去
+            state.enemies.splice(i, 1)
+          } else {
             const norm = (enemy.speed * deltaMS * 0.05) / dist
             enemy.x += dx * norm
             enemy.y += dy * norm
