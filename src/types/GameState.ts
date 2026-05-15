@@ -81,6 +81,7 @@ export interface GameState {
   player: PlayerState
   shakeState: ShakeState
   zoomState: ZoomState | null
+  playerHp: number
 }
 
 export const VIEW_WIDTH = 400
@@ -111,6 +112,7 @@ export function createInitialGameState(): GameState {
       direction: 'south',
       isMoving: false,
     },
+    playerHp: 3,
   }
 }
 

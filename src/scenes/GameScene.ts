@@ -55,6 +55,30 @@ export class GameScene extends Container {
     },
   })
 
+  private readonly uiGraphics = new Graphics()
+  private readonly bombText = new Text({
+    text: 'none',
+    style: {
+      fill: COLORS.uiText,
+      fontFamily: 'monospace',
+      fontSize: 16,
+      fontWeight: '700',
+      stroke: { color: 0x000000, width: 3 },
+    },
+  })
+  private readonly bombStockText = new Text({
+    text: '×0',
+    style: {
+      fill: COLORS.uiText,
+      fontFamily: 'monospace',
+      fontSize: 16,
+      fontWeight: '700',
+      stroke: { color: 0x000000, width: 3 },
+    },
+  })
+  private readonly minimapGraphics = new Graphics()
+  private readonly minimapMarker = new Graphics()
+
   constructor() {
     super()
     this.mapLayer.addChild(this.mapGraphics)
@@ -70,7 +94,25 @@ export class GameScene extends Container {
     this.scoreText.anchor.set(1, 0)
     this.scoreText.x = VIEW_WIDTH - 14
     this.scoreText.y = 12
-    this.uiLayer.addChild(this.clockText, this.scoreText)
+    // ボム選択表示（左下）
+    this.bombText.x = 14
+    this.bombText.y = VIEW_HEIGHT - 70
+    this.bombStockText.x = 14 + 120
+    this.bombStockText.y = VIEW_HEIGHT - 70
+    // ミニマップ（右下）
+    this.minimapGraphics.x = VIEW_WIDTH - 80 - 14
+    this.minimapGraphics.y = VIEW_HEIGHT - 80 - 14
+    this.minimapMarker.x = VIEW_WIDTH - 80 - 14
+    this.minimapMarker.y = VIEW_HEIGHT - 80 - 14
+    this.uiLayer.addChild(
+      this.clockText,
+      this.scoreText,
+      this.uiGraphics,
+      this.bombText,
+      this.bombStockText,
+      this.minimapGraphics,
+      this.minimapMarker,
+    )
   }
 
   initWithState(state: GameState): void {
@@ -119,6 +161,7 @@ export class GameScene extends Container {
     }
 
     this.draw()
+    this.initMinimap()
   }
 
   getState(): GameState | null {
@@ -425,6 +468,67 @@ export class GameScene extends Container {
     const state = this.requireState()
     this.clockText.text = getClockText(state)
     this.scoreText.text = state.score.toString().padStart(6, '0')
+    this.updateUI()
+  }
+
+  private updateUI(): void {
+    const state = this.requireState()
+    this.uiGraphics.clear()
+
+    // HPバー（左上、y=42）
+    const maxHp = 3
+    const hpBoxSize = 16
+    const hpGap = 2
+    for (let i = 0; i < maxHp; i++) {
+      const color = i < state.playerHp ? COLORS.enemyHp2 : 0x555555
+      this.uiGraphics.rect(14 + i * (hpBoxSize + hpGap), 42, hpBoxSize, hpBoxSize)
+      this.uiGraphics.fill(color)
+    }
+
+    // ボム選択テキスト
+    this.bombText.text = state.selectedBomb ?? 'none'
+    this.bombStockText.text = `×${state.bombStock}`
+
+    // プレイヤーマーカー（ミニマップ）
+    const map = state.map
+    const mapW = map.length        // 19
+    const mapH = map[0].length     // 25
+    const mmW = 80
+    const mmH = 80
+    const cellW = mmW / mapW
+    const cellH = mmH / mapH
+    this.minimapMarker.clear()
+    const mx = state.player.panelX * cellW + cellW / 2
+    const my = state.player.panelY * cellH + cellH / 2
+    this.minimapMarker.circle(mx, my, 2)
+    this.minimapMarker.fill(0xffffff)
+  }
+
+  private initMinimap(): void {
+    const state = this.requireState()
+    const map = state.map
+    const mapW = map.length
+    const mapH = map[0].length
+    const mmW = 80
+    const mmH = 80
+    const cellW = mmW / mapW
+    const cellH = mmH / mapH
+
+    this.minimapGraphics.clear()
+    // 半透明背景
+    this.minimapGraphics.rect(0, 0, mmW, mmH)
+    this.minimapGraphics.fill({ color: 0x000000, alpha: 0.5 })
+
+    // 各パネルを塗る
+    for (const col of map) {
+      for (const panel of col) {
+        const px = panel.x * cellW
+        const py = panel.y * cellH
+        const color = PANEL_COLORS[panel.type]
+        this.minimapGraphics.rect(px, py, cellW, cellH)
+        this.minimapGraphics.fill(color)
+      }
+    }
   }
 
   private advanceEnemies(deltaMS: number): void {
