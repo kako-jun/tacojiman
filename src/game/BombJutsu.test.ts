@@ -99,4 +99,34 @@ describe('applyBombDamage', () => {
     applyBombDamage(state, 'proton')
     expect(state.enemies[0].hp).toBe(41)
   })
+
+  it('dainsleif: 全敵に1ダメージ', () => {
+    const state = makeState([makeEnemy('a', 5), makeEnemy('b', 2)])
+    const result = applyBombDamage(state, 'dainsleif')
+    expect(result.hitResults.get('a')).toBe(4)
+    expect(result.hitResults.get('b')).toBe(1)
+  })
+
+  it('enemies が空配列のとき hitResults も空', () => {
+    const state = makeState([])
+    const result = applyBombDamage(state, 'proton')
+    expect(result.hitResults.size).toBe(0)
+    expect(state.enemies).toHaveLength(0)
+  })
+
+  it('sol: dist=150 ちょうどの敵はダメージを受ける（境界値）', () => {
+    // x=150, y=0 → dist = 150.0
+    const atBoundary = makeEnemy('boundary', 5, 150, 0)
+    const state = makeState([atBoundary])
+    const result = applyBombDamage(state, 'sol')
+    expect(result.hitResults.get('boundary')).toBe(3)
+  })
+
+  it('sol: dist が 150 を僅かに超える敵はダメージなし（境界値）', () => {
+    // x=151, y=0 → dist = 151.0
+    const justOutside = makeEnemy('just-outside', 5, 151, 0)
+    const state = makeState([justOutside])
+    const result = applyBombDamage(state, 'sol')
+    expect(result.hitResults.has('just-outside')).toBe(false)
+  })
 })

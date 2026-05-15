@@ -6,8 +6,8 @@ export interface BombEffect {
   hitResults: Map<string, number>
 }
 
-// 各ボムが当たり判定を計算して敵のダメージを返す純粋関数
-// エフェクト描画は GameScene 側で行う
+// 各ボムの当たり判定を計算し、state.enemies の HP 更新と除去を行う
+// BombEffect（hitResults）を返す。エフェクト描画は GameScene 側で行う
 
 export function applyBombDamage(state: GameState, type: BombType): BombEffect {
   const result: BombEffect = { type, hitResults: new Map() }
