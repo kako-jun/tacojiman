@@ -373,6 +373,54 @@ describe('generateMap — connections 構造検証（drawMap の描画前提）'
   })
 })
 
+describe('PlayerState 初期化', () => {
+  it('player.panelX が 9（centerX）であること', () => {
+    const state = createInitialGameState()
+
+    expect(state.player.panelX).toBe(9)
+  })
+
+  it('player.panelY が 12（centerY）であること', () => {
+    const state = createInitialGameState()
+
+    expect(state.player.panelY).toBe(12)
+  })
+
+  it('player.direction が south であること', () => {
+    const state = createInitialGameState()
+
+    expect(state.player.direction).toBe('south')
+  })
+
+  it('player.isMoving が false であること', () => {
+    const state = createInitialGameState()
+
+    expect(state.player.isMoving).toBe(false)
+  })
+
+  it('player の初期位置 (9, 12) が player_house パネルであること', () => {
+    const state = createInitialGameState()
+
+    expect(state.map[state.player.panelX][state.player.panelY].type).toBe('player_house')
+  })
+
+  it('player_house が east 方向の隣接 path と接続していること', () => {
+    const state = createInitialGameState()
+
+    // map[10][12] は centerY 行の path（east 隣接）
+    expect(state.map[10][12].type).toBe('path')
+    expect(state.map[state.player.panelX][state.player.panelY].connections.east).toBe(true)
+  })
+
+  it('player_house が west 方向の隣接 path と接続していること', () => {
+    const state = createInitialGameState()
+
+    // map[8][12] は centerY 行の path（west 隣接）
+    expect(state.map[8][12].type).toBe('path')
+    expect(state.map[state.player.panelX][state.player.panelY].connections.west).toBe(true)
+  })
+})
+
 // テスト内で使うローカルヘルパー
 function isNonConnectable(type: string): boolean {
   return !['path', 'rail', 'station', 'player_house'].includes(type)
