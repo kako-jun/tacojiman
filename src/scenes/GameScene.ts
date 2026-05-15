@@ -22,6 +22,7 @@ import { EffectManager } from './EffectManager'
 import { SoundManager } from '../game/SoundManager'
 
 export class GameScene extends Container {
+  onEnding: ((score: number) => void) | null = null
   private state: GameState | null = null
   private readonly mapLayer = new Container()
   private readonly enemyLayer = new Container()
@@ -182,6 +183,14 @@ export class GameScene extends Container {
       this.state.durationMs,
       this.state.elapsedMs + ticker.deltaMS
     )
+
+    // 時間切れ → ending フェーズへ
+    if (this.state.elapsedMs >= this.state.durationMs) {
+      this.state.phase = 'ending'
+      this.onEnding?.(this.state.score)
+      return
+    }
+
     this.mapLayer.rotation += 0.00005 * ticker.deltaMS
 
     // スポーン

@@ -1,6 +1,6 @@
 import { Container } from 'pixi.js'
 
-export type SceneKey = 'title' | 'game'
+export type SceneKey = 'title' | 'game' | 'ending'
 
 export class SceneManager {
   readonly world = new Container()
