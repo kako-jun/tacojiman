@@ -43,6 +43,7 @@ export interface EnemyState {
   x: number
   y: number
   routeProgress: number
+  route: Array<{ x: number; y: number }>
 }
 
 export interface CameraState {
@@ -90,9 +91,10 @@ export function createInitialGameState(): GameState {
         x: 54,
         y: 482,
         routeProgress: 0,
+        route: [],
       },
-      { id: 'water-1', type: 'water', hp: 2, x: 330, y: 110, routeProgress: 0 },
-      { id: 'air-1', type: 'air', hp: 1, x: 320, y: 462, routeProgress: 0 },
+      { id: 'water-1', type: 'water', hp: 2, x: 330, y: 110, routeProgress: 0, route: [] },
+      { id: 'air-1', type: 'air', hp: 1, x: 320, y: 462, routeProgress: 0, route: [] },
     ],
     camera: { x: VIEW_WIDTH / 2, y: VIEW_HEIGHT / 2, scale: 1 },
     takokongSpawned: false,

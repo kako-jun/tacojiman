@@ -1,5 +1,74 @@
 import type { MapPanel, PanelConnections, PanelType } from '../types/GameState'
 
+const WALKABLE: PanelType[] = ['path', 'rail', 'station', 'player_house']
+
+function isWalkable(type: PanelType): boolean {
+  return WALKABLE.includes(type)
+}
+
+function heuristic(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y)
+}
+
+export function findPath(
+  map: MapPanel[][],
+  start: { x: number; y: number },
+  goal: { x: number; y: number }
+): Array<{ x: number; y: number }> {
+  const startPanel = map[start.x]?.[start.y]
+  const goalPanel = map[goal.x]?.[goal.y]
+  if (!startPanel || !goalPanel) return []
+  if (!isWalkable(startPanel.type) || !isWalkable(goalPanel.type)) return []
+
+  type Node = { x: number; y: number; f: number; g: number }
+  const key = (x: number, y: number) => `${x},${y}`
+
+  const openSet: Node[] = [{ x: start.x, y: start.y, f: heuristic(start, goal), g: 0 }]
+  const cameFrom = new Map<string, { x: number; y: number }>()
+  const gScore = new Map<string, number>()
+  gScore.set(key(start.x, start.y), 0)
+
+  while (openSet.length > 0) {
+    openSet.sort((a, b) => a.f - b.f)
+    const current = openSet.shift()!
+
+    if (current.x === goal.x && current.y === goal.y) {
+      const path: Array<{ x: number; y: number }> = []
+      let node: { x: number; y: number } = current
+      while (!(node.x === start.x && node.y === start.y)) {
+        path.unshift({ x: node.x, y: node.y })
+        node = cameFrom.get(key(node.x, node.y))!
+      }
+      return path
+    }
+
+    const panel = map[current.x]?.[current.y]
+    if (!panel) continue
+
+    const neighbors: Array<{ x: number; y: number }> = []
+    if (panel.connections.north) neighbors.push({ x: current.x, y: current.y - 1 })
+    if (panel.connections.south) neighbors.push({ x: current.x, y: current.y + 1 })
+    if (panel.connections.east) neighbors.push({ x: current.x + 1, y: current.y })
+    if (panel.connections.west) neighbors.push({ x: current.x - 1, y: current.y })
+
+    for (const neighbor of neighbors) {
+      const neighborPanel = map[neighbor.x]?.[neighbor.y]
+      if (!neighborPanel || !isWalkable(neighborPanel.type)) continue
+
+      const tentativeG = (gScore.get(key(current.x, current.y)) ?? Infinity) + 1
+      const neighborKey = key(neighbor.x, neighbor.y)
+      if (tentativeG < (gScore.get(neighborKey) ?? Infinity)) {
+        cameFrom.set(neighborKey, { x: current.x, y: current.y })
+        gScore.set(neighborKey, tentativeG)
+        const f = tentativeG + heuristic(neighbor, goal)
+        openSet.push({ x: neighbor.x, y: neighbor.y, f, g: tentativeG })
+      }
+    }
+  }
+
+  return []
+}
+
 const CLOSED: PanelConnections = {
   north: false,
   south: false,
