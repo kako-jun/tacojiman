@@ -315,7 +315,7 @@ describe('generateMap — connections 構造検証（drawMap の描画前提）'
     expect(panel.connections.north).toBe(true)
   })
 
-  it('player_house の connections は南方向に path がなければ false になること', () => {
+  it('player_house の connections は南方向の隣接 path と接続していること', () => {
     const map = generateMap(19, 25)
 
     // player_house: map[9][12]。south: map[9][13] は path（centerY 行）
