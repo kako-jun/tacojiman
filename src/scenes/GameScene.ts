@@ -1,23 +1,29 @@
 import { Container, Graphics, Text, type Ticker } from 'pixi.js'
+import gsap from 'gsap'
 import { COLORS, PANEL_COLORS } from '../constants/colors'
 import {
   getClockText,
   TILE_SIZE,
   VIEW_HEIGHT,
   VIEW_WIDTH,
+  type Direction,
   type EnemyState,
   type GameState,
   type MapPanel,
 } from '../types/GameState'
 import { findPath } from '../game/map'
+import { KeyboardManager } from '../game/KeyboardManager'
 
 export class GameScene extends Container {
   private state: GameState | null = null
   private readonly mapLayer = new Container()
   private readonly enemyLayer = new Container()
+  private readonly playerLayer = new Container()
   private readonly uiLayer = new Container()
   private readonly mapGraphics = new Graphics()
   private readonly enemyGraphics = new Graphics()
+  private readonly playerGraphics = new Graphics()
+  private keyboard: KeyboardManager | null = null
   private readonly clockText = new Text({
     text: '7:00 AM',
     style: {
@@ -42,8 +48,12 @@ export class GameScene extends Container {
   constructor() {
     super()
     this.mapLayer.addChild(this.mapGraphics)
+    // enemyLayer / playerLayer は mapLayer の子にして自動回転に追従させる
     this.enemyLayer.addChild(this.enemyGraphics)
-    this.addChild(this.mapLayer, this.enemyLayer, this.uiLayer)
+    this.mapLayer.addChild(this.enemyLayer)
+    this.playerLayer.addChild(this.playerGraphics)
+    this.mapLayer.addChild(this.playerLayer)
+    this.addChild(this.mapLayer, this.uiLayer)
     this.clockText.x = 14
     this.clockText.y = 12
     this.scoreText.anchor.set(1, 0)
@@ -59,8 +69,17 @@ export class GameScene extends Container {
     const map = this.state.map
     const width = map.length * TILE_SIZE
     const height = map[0].length * TILE_SIZE
-    this.enemyLayer.x = VIEW_WIDTH / 2
-    this.enemyLayer.y = VIEW_HEIGHT / 2
+    // enemyLayer / playerLayer は mapLayer の子のためオフセット設定不要
+
+    // KeyboardManager を生成
+    this.keyboard = new KeyboardManager()
+
+    // プレイヤーの初期ピクセル座標を計算
+    const { panelX, panelY } = this.state.player
+    const initialPixel = this.panelToPixel(panelX, panelY)
+    this.playerGraphics.x = initialPixel.x
+    this.playerGraphics.y = initialPixel.y
+    this.drawPlayer(this.state.player.direction)
 
     // A*で各敵のrouteを計算
     const goalPanel = map.flat().find((p) => p.type === 'player_house')
@@ -68,9 +87,9 @@ export class GameScene extends Container {
       const offsetX = -width / 2
       const offsetY = -height / 2
       for (const enemy of this.state.enemies) {
-        // ピクセル座標からpanel座標に変換
-        const startX = Math.round((enemy.x - (VIEW_WIDTH / 2) - offsetX) / TILE_SIZE)
-        const startY = Math.round((enemy.y - (VIEW_HEIGHT / 2) - offsetY) / TILE_SIZE)
+        // enemy.x/y は mapLayer ローカル座標（offsetX/offsetY ベース）
+        const startX = Math.round((enemy.x - offsetX) / TILE_SIZE)
+        const startY = Math.round((enemy.y - offsetY) / TILE_SIZE)
         const route = findPath(map, { x: startX, y: startY }, { x: goalPanel.x, y: goalPanel.y })
         enemy.route = route
       }
@@ -93,6 +112,7 @@ export class GameScene extends Container {
     this.advanceEnemies(ticker.deltaMS)
     this.drawEnemies()
     this.drawUi()
+    this.tryMovePlayer()
   }
 
   private draw(): void {
@@ -279,13 +299,18 @@ export class GameScene extends Container {
           enemy.y = from.py + (to.py - from.py) * segT
         }
       } else {
-        // フォールバック: 中心引き寄せ
+        // フォールバック: mapLayer 中心（0,0）へ引き寄せ
         enemy.routeProgress += deltaMS / 18_000
         const t = Math.min(1, enemy.routeProgress)
-        enemy.x += (VIEW_WIDTH / 2 - enemy.x) * t * 0.002
-        enemy.y += (VIEW_HEIGHT / 2 - enemy.y) * t * 0.002
+        enemy.x += (0 - enemy.x) * t * 0.002
+        enemy.y += (0 - enemy.y) * t * 0.002
       }
     }
+  }
+
+  override destroy(): void {
+    this.keyboard?.destroy()
+    super.destroy()
   }
 
   private requireState(): GameState {
@@ -293,5 +318,90 @@ export class GameScene extends Container {
       throw new Error('GameScene.initWithState must be called before use')
     }
     return this.state
+  }
+
+  private panelToPixel(panelX: number, panelY: number): { x: number; y: number } {
+    const width = this.state!.map.length * TILE_SIZE
+    const height = this.state!.map[0].length * TILE_SIZE
+    const offsetX = -width / 2
+    const offsetY = -height / 2
+    return {
+      x: panelX * TILE_SIZE + offsetX + TILE_SIZE / 2,
+      y: panelY * TILE_SIZE + offsetY + TILE_SIZE / 2,
+    }
+  }
+
+  private tryMovePlayer(): void {
+    const state = this.requireState()
+    if (state.player.isMoving || state.phase !== 'playing') return
+
+    if (this.keyboard === null) return
+    const dir = this.keyboard.getDirection()
+    if (dir === null) return
+
+    const { panelX, panelY } = state.player
+    const currentPanel = state.map[panelX]?.[panelY]
+    if (!currentPanel) return
+
+    if (!currentPanel.connections[dir]) return
+
+    const dx = dir === 'east' ? 1 : dir === 'west' ? -1 : 0
+    const dy = dir === 'south' ? 1 : dir === 'north' ? -1 : 0
+    const nextPanelX = panelX + dx
+    const nextPanelY = panelY + dy
+
+    const targetPixel = this.panelToPixel(nextPanelX, nextPanelY)
+
+    state.player.direction = dir
+    state.player.isMoving = true
+    state.player.panelX = nextPanelX
+    state.player.panelY = nextPanelY
+
+    this.drawPlayer(dir)
+
+    gsap.to(this.playerGraphics, {
+      x: targetPixel.x,
+      y: targetPixel.y,
+      duration: 0.15,
+      ease: 'none',
+      onComplete: () => {
+        state.player.isMoving = false
+      },
+    })
+  }
+
+  private drawPlayer(direction: Direction): void {
+    this.playerGraphics.clear()
+
+    // 胴体
+    this.playerGraphics.circle(0, 0, 14)
+    this.playerGraphics.fill(0x3a7abf)
+
+    // 向きに応じた目のオフセット
+    let eyeOffsetX = 0
+    let eyeOffsetY = 0
+    if (direction === 'north') eyeOffsetY = -4
+    else if (direction === 'south') eyeOffsetY = 4
+    else if (direction === 'east') eyeOffsetX = 4
+    else if (direction === 'west') eyeOffsetX = -4
+
+    // 目（白丸）
+    this.playerGraphics.circle(-5 + eyeOffsetX, -3 + eyeOffsetY, 3)
+    this.playerGraphics.circle(5 + eyeOffsetX, -3 + eyeOffsetY, 3)
+    this.playerGraphics.fill(0xffffff)
+
+    // 目（黒丸）
+    this.playerGraphics.circle(-5 + eyeOffsetX, -3 + eyeOffsetY, 1.5)
+    this.playerGraphics.circle(5 + eyeOffsetX, -3 + eyeOffsetY, 1.5)
+    this.playerGraphics.fill(0x000000)
+
+    // 触腕（4本、胴体下部から）
+    const tentacleStartX = -6
+    const tentacleSpacing = 4
+    for (let i = 0; i < 4; i++) {
+      const tx = tentacleStartX + i * tentacleSpacing
+      this.playerGraphics.rect(tx - 1.5, 12, 3, 6)
+      this.playerGraphics.fill(0x2a5a9f)
+    }
   }
 }
