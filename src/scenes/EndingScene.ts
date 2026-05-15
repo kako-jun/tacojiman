@@ -9,14 +9,14 @@ interface EndingInfo {
 }
 
 const SCORE_THRESHOLDS = {
-  true: 8001,
+  trueEnd: 8001,
   special: 5001,
   good: 3001,
   normal: 1001,
 } as const
 
 function getEndingInfo(score: number): EndingInfo {
-  if (score >= SCORE_THRESHOLDS.true) {
+  if (score >= SCORE_THRESHOLDS.trueEnd) {
     return {
       level: 5,
       bgColor: 0xffd700,
@@ -150,8 +150,10 @@ export class EndingScene extends Container {
 
     // 背景再描画
     this.bgGraphics.clear()
+    // ベースカラー（半透明）
     this.bgGraphics.rect(0, 0, VIEW_WIDTH, VIEW_HEIGHT)
     this.bgGraphics.fill({ color: info.bgColor, alpha: 0.3 })
+    // 黒オーバーレイで輝度を下げる
     this.bgGraphics.rect(0, 0, VIEW_WIDTH, VIEW_HEIGHT)
     this.bgGraphics.fill({ color: 0x000000, alpha: 0.7 })
 
