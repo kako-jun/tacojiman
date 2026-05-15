@@ -1,4 +1,4 @@
-import { Container, Graphics, Text } from 'pixi.js'
+import { Container, Graphics, Rectangle, Text } from 'pixi.js'
 import { VIEW_HEIGHT, VIEW_WIDTH } from '../types/GameState'
 
 interface EndingInfo {
@@ -8,8 +8,15 @@ interface EndingInfo {
   dialogue: string
 }
 
+const SCORE_THRESHOLDS = {
+  true: 8001,
+  special: 5001,
+  good: 3001,
+  normal: 1001,
+} as const
+
 function getEndingInfo(score: number): EndingInfo {
-  if (score >= 8001) {
+  if (score >= SCORE_THRESHOLDS.true) {
     return {
       level: 5,
       bgColor: 0xffd700,
@@ -17,7 +24,7 @@ function getEndingInfo(score: number): EndingInfo {
       dialogue: '「ありがとう...今度は私が守るから」',
     }
   }
-  if (score >= 5001) {
+  if (score >= SCORE_THRESHOLDS.special) {
     return {
       level: 4,
       bgColor: 0xff69b4,
@@ -25,7 +32,7 @@ function getEndingInfo(score: number): EndingInfo {
       dialogue: '「本当は...好きだったの」',
     }
   }
-  if (score >= 3001) {
+  if (score >= SCORE_THRESHOLDS.good) {
     return {
       level: 3,
       bgColor: 0x87ceeb,
@@ -33,7 +40,7 @@ function getEndingInfo(score: number): EndingInfo {
       dialogue: '「心配してくれてたのね...」',
     }
   }
-  if (score >= 1001) {
+  if (score >= SCORE_THRESHOLDS.normal) {
     return {
       level: 2,
       bgColor: 0xdda0dd,
@@ -132,6 +139,7 @@ export class EndingScene extends Container {
 
     // 画面全体タップでリプレイ
     this.eventMode = 'static'
+    this.hitArea = new Rectangle(0, 0, VIEW_WIDTH, VIEW_HEIGHT)
     this.on('pointertap', () => {
       onReplay()
     })

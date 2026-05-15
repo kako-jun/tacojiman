@@ -121,6 +121,7 @@ export class GameScene extends Container {
 
   initWithState(state: GameState): void {
     this.state = structuredClone(state)
+    this.takokongBgmStarted = false
     this.state.phase = 'playing'
 
     const map = this.state.map
@@ -139,6 +140,7 @@ export class GameScene extends Container {
     this.sound.startAmbient()
 
     // score-gain イベントのハンドラを登録
+    this.events.removeAllListeners('score-gain')
     this.events.on('score-gain', (e) => {
       this.effectManager?.showScoreGain(e)
       this.sound?.playSe('se_score')
@@ -186,6 +188,7 @@ export class GameScene extends Container {
 
     // 時間切れ → ending フェーズへ
     if (this.state.elapsedMs >= this.state.durationMs) {
+      // phase を 'ending' に設定してから return することで以降のフレームは早期 return される
       this.state.phase = 'ending'
       this.onEnding?.(this.state.score)
       return
