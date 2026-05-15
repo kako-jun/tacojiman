@@ -118,11 +118,125 @@ export class GameScene extends Container {
       for (const panel of col) {
         const x = offsetX + panel.x * TILE_SIZE
         const y = offsetY + panel.y * TILE_SIZE
+        // ベース矩形
         this.mapGraphics.rect(x, y, TILE_SIZE - 1, TILE_SIZE - 1)
         this.mapGraphics.fill(PANEL_COLORS[panel.type])
-        if (panel.type === 'player_house') {
+
+        const cx = x + TILE_SIZE / 2
+        const cy = y + TILE_SIZE / 2
+        const { north, south, east, west } = panel.connections
+
+        if (panel.type === 'path') {
+          // 接続方向への道路線（幅 8px）
+          const half = 8 / 2
+          const pathColor = 0xc49458
+          if (north) {
+            this.mapGraphics.rect(cx - half, y, half * 2, TILE_SIZE / 2)
+            this.mapGraphics.fill(pathColor)
+          }
+          if (south) {
+            this.mapGraphics.rect(cx - half, cy, half * 2, TILE_SIZE / 2)
+            this.mapGraphics.fill(pathColor)
+          }
+          if (east) {
+            this.mapGraphics.rect(cx, cy - half, TILE_SIZE / 2, half * 2)
+            this.mapGraphics.fill(pathColor)
+          }
+          if (west) {
+            this.mapGraphics.rect(x, cy - half, TILE_SIZE / 2, half * 2)
+            this.mapGraphics.fill(pathColor)
+          }
+        } else if (panel.type === 'rail') {
+          // 接続方向への線路線（幅 6px）
+          const half = 6 / 2
+          const railColor = 0x8a8f9a
+          if (north) {
+            this.mapGraphics.rect(cx - half, y, half * 2, TILE_SIZE / 2)
+            this.mapGraphics.fill(railColor)
+          }
+          if (south) {
+            this.mapGraphics.rect(cx - half, cy, half * 2, TILE_SIZE / 2)
+            this.mapGraphics.fill(railColor)
+          }
+          if (east) {
+            this.mapGraphics.rect(cx, cy - half, TILE_SIZE / 2, half * 2)
+            this.mapGraphics.fill(railColor)
+          }
+          if (west) {
+            this.mapGraphics.rect(x, cy - half, TILE_SIZE / 2, half * 2)
+            this.mapGraphics.fill(railColor)
+          }
+          // 枕木（4px × 10px を中心付近に 3 本）
+          const sleeperColor = 0x6b6050
+          const sleeperOffsets = [-6, 0, 6]
+          for (const off of sleeperOffsets) {
+            this.mapGraphics.rect(cx - 5, cy + off - 2, 10, 4)
+            this.mapGraphics.fill(sleeperColor)
+          }
+        } else if (panel.type === 'station') {
+          // 接続方向への線（rail と同色・同幅）
+          const half = 6 / 2
+          const railColor = 0x8a8f9a
+          if (north) {
+            this.mapGraphics.rect(cx - half, y, half * 2, TILE_SIZE / 2)
+            this.mapGraphics.fill(railColor)
+          }
+          if (south) {
+            this.mapGraphics.rect(cx - half, cy, half * 2, TILE_SIZE / 2)
+            this.mapGraphics.fill(railColor)
+          }
+          if (east) {
+            this.mapGraphics.rect(cx, cy - half, TILE_SIZE / 2, half * 2)
+            this.mapGraphics.fill(railColor)
+          }
+          if (west) {
+            this.mapGraphics.rect(x, cy - half, TILE_SIZE / 2, half * 2)
+            this.mapGraphics.fill(railColor)
+          }
+          // プラットフォーム矩形（中央寄り 70%）
+          const platformW = (TILE_SIZE - 1) * 0.7
+          const platformH = (TILE_SIZE - 1) * 0.7
+          this.mapGraphics.rect(
+            cx - platformW / 2,
+            cy - platformH / 2,
+            platformW,
+            platformH
+          )
+          this.mapGraphics.fill(0xe8e0d0)
+        } else if (panel.type === 'player_house') {
+          // 家らしい内側矩形（木の色）
           this.mapGraphics.rect(x + 5, y + 5, TILE_SIZE - 10, TILE_SIZE - 10)
-          this.mapGraphics.fill(0x202020)
+          this.mapGraphics.fill(0x6b4226)
+          // 接続している path 方向に玄関（4px 幅の明るい線）
+          const half = 4 / 2
+          const entranceColor = 0xf4c98a
+          if (north) {
+            this.mapGraphics.rect(cx - half, y, half * 2, 5)
+            this.mapGraphics.fill(entranceColor)
+          }
+          if (south) {
+            this.mapGraphics.rect(cx - half, y + TILE_SIZE - 6, half * 2, 5)
+            this.mapGraphics.fill(entranceColor)
+          }
+          if (east) {
+            this.mapGraphics.rect(x + TILE_SIZE - 6, cy - half, 5, half * 2)
+            this.mapGraphics.fill(entranceColor)
+          }
+          if (west) {
+            this.mapGraphics.rect(x, cy - half, 5, half * 2)
+            this.mapGraphics.fill(entranceColor)
+          }
+        } else if (panel.type === 'other_house') {
+          // 屋根風の内側矩形
+          const roofW = (TILE_SIZE - 1) * 0.6
+          const roofH = (TILE_SIZE - 1) * 0.35
+          this.mapGraphics.rect(
+            cx - roofW / 2,
+            y + 3,
+            roofW,
+            roofH
+          )
+          this.mapGraphics.fill(0x8b5e3c)
         }
       }
     }
