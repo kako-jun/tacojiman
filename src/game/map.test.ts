@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { generateMap } from './map'
+import type { MapPanel } from '../types/GameState'
+import { createInitialGameState } from '../types/GameState'
+import { findPath, generateMap } from './map'
 
 describe('generateMap', () => {
   it('places the player house at the center', () => {
@@ -15,5 +17,238 @@ describe('generateMap', () => {
     expect(map[9][14].connections.north).toBe(true)
     expect(map[4][8].type).toBe('station')
     expect(map[5][8].connections.west).toBe(true)
+  })
+})
+
+// helpers
+function p(x: number, y: number, type: MapPanel['type'], connections: Partial<MapPanel['connections']> = {}): MapPanel {
+  return {
+    x,
+    y,
+    type,
+    connections: { north: false, south: false, east: false, west: false, ...connections },
+  }
+}
+
+describe('findPath — 正常系', () => {
+  it('直線経路が取得できる（返値が [中間, goal] になること）', () => {
+    // x=0 -> x=1 -> x=2 の直線
+    const map: MapPanel[][] = [
+      [p(0, 0, 'path', { east: true })],
+      [p(1, 0, 'path', { west: true, east: true })],
+      [p(2, 0, 'path', { west: true })],
+    ]
+    const result = findPath(map, { x: 0, y: 0 }, { x: 2, y: 0 })
+
+    expect(result).toEqual([{ x: 1, y: 0 }, { x: 2, y: 0 }])
+  })
+
+  it('L字経路が取得できる（折れ曲がった経路を正しく返すこと）', () => {
+    // (0,0) east-> (1,0) south-> (1,1)
+    const map: MapPanel[][] = [
+      [p(0, 0, 'path', { east: true }), p(0, 1, 'river')],
+      [p(1, 0, 'path', { west: true, south: true }), p(1, 1, 'path', { north: true })],
+    ]
+    const result = findPath(map, { x: 0, y: 0 }, { x: 1, y: 1 })
+
+    expect(result).toEqual([{ x: 1, y: 0 }, { x: 1, y: 1 }])
+  })
+
+  it('返値に start は含まれない', () => {
+    const map: MapPanel[][] = [
+      [p(0, 0, 'path', { east: true })],
+      [p(1, 0, 'path', { west: true })],
+    ]
+    const result = findPath(map, { x: 0, y: 0 }, { x: 1, y: 0 })
+
+    expect(result.some((n) => n.x === 0 && n.y === 0)).toBe(false)
+  })
+
+  it('返値の末尾が goal である', () => {
+    const map: MapPanel[][] = [
+      [p(0, 0, 'path', { east: true })],
+      [p(1, 0, 'path', { west: true, east: true })],
+      [p(2, 0, 'path', { west: true })],
+    ]
+    const result = findPath(map, { x: 0, y: 0 }, { x: 2, y: 0 })
+
+    expect(result[result.length - 1]).toEqual({ x: 2, y: 0 })
+  })
+
+  it('start === goal のとき空配列を返す', () => {
+    const map: MapPanel[][] = [
+      [p(0, 0, 'path', {})],
+    ]
+    const result = findPath(map, { x: 0, y: 0 }, { x: 0, y: 0 })
+
+    expect(result).toEqual([])
+  })
+})
+
+describe('findPath — 異常系 / 境界値 / null', () => {
+  it('start が map 範囲外（負座標）のとき [] を返す', () => {
+    const map: MapPanel[][] = [
+      [p(0, 0, 'path', {})],
+    ]
+    const result = findPath(map, { x: -1, y: 0 }, { x: 0, y: 0 })
+
+    expect(result).toEqual([])
+  })
+
+  it('goal が map 範囲外のとき [] を返す', () => {
+    const map: MapPanel[][] = [
+      [p(0, 0, 'path', {})],
+    ]
+    const result = findPath(map, { x: 0, y: 0 }, { x: 5, y: 5 })
+
+    expect(result).toEqual([])
+  })
+
+  it('start パネルが non-walkable（water）のとき [] を返す', () => {
+    const map: MapPanel[][] = [
+      [p(0, 0, 'water', { east: true })],
+      [p(1, 0, 'path', { west: true })],
+    ]
+    const result = findPath(map, { x: 0, y: 0 }, { x: 1, y: 0 })
+
+    expect(result).toEqual([])
+  })
+
+  it('goal パネルが non-walkable のとき [] を返す', () => {
+    const map: MapPanel[][] = [
+      [p(0, 0, 'path', { east: true })],
+      [p(1, 0, 'river', { west: true })],
+    ]
+    const result = findPath(map, { x: 0, y: 0 }, { x: 1, y: 0 })
+
+    expect(result).toEqual([])
+  })
+})
+
+describe('findPath — 到達不能 / 孤立', () => {
+  it('接続のない孤立 start から [] を返す（connections が全 false）', () => {
+    const map: MapPanel[][] = [
+      [p(0, 0, 'path', {}), p(0, 1, 'path', {})],
+    ]
+    const result = findPath(map, { x: 0, y: 0 }, { x: 0, y: 1 })
+
+    expect(result).toEqual([])
+  })
+
+  it('経路が存在しない（グラフ的に非連結）とき [] を返す', () => {
+    // 2つのパネルが隣接しているが接続されていない
+    const map: MapPanel[][] = [
+      [p(0, 0, 'path', { east: false })],
+      [p(1, 0, 'path', { west: false })],
+    ]
+    const result = findPath(map, { x: 0, y: 0 }, { x: 1, y: 0 })
+
+    expect(result).toEqual([])
+  })
+})
+
+describe('findPath — 同値分割（PanelType の walkable 境界）', () => {
+  it("'path' は walkable として経由できる", () => {
+    const map: MapPanel[][] = [
+      [p(0, 0, 'path', { east: true })],
+      [p(1, 0, 'path', { west: true, east: true })],
+      [p(2, 0, 'path', { west: true })],
+    ]
+    const result = findPath(map, { x: 0, y: 0 }, { x: 2, y: 0 })
+
+    expect(result.length).toBeGreaterThan(0)
+  })
+
+  it("'rail' は walkable として経由できる", () => {
+    const map: MapPanel[][] = [
+      [p(0, 0, 'path', { east: true })],
+      [p(1, 0, 'rail', { west: true, east: true })],
+      [p(2, 0, 'path', { west: true })],
+    ]
+    const result = findPath(map, { x: 0, y: 0 }, { x: 2, y: 0 })
+
+    expect(result.length).toBeGreaterThan(0)
+  })
+
+  it("'station' は walkable として経由できる", () => {
+    const map: MapPanel[][] = [
+      [p(0, 0, 'path', { east: true })],
+      [p(1, 0, 'station', { west: true, east: true })],
+      [p(2, 0, 'path', { west: true })],
+    ]
+    const result = findPath(map, { x: 0, y: 0 }, { x: 2, y: 0 })
+
+    expect(result.length).toBeGreaterThan(0)
+  })
+
+  it("'player_house' は walkable として goal になれる", () => {
+    const map: MapPanel[][] = [
+      [p(0, 0, 'path', { east: true })],
+      [p(1, 0, 'player_house', { west: true })],
+    ]
+    const result = findPath(map, { x: 0, y: 0 }, { x: 1, y: 0 })
+
+    expect(result).toEqual([{ x: 1, y: 0 }])
+  })
+
+  it("'other_house' は non-walkable として経由されない", () => {
+    // (0,0) -> (1,0)[other_house] -> (2,0) の直線だが other_house は通れない
+    const map: MapPanel[][] = [
+      [p(0, 0, 'path', { east: true })],
+      [p(1, 0, 'other_house', { west: true, east: true })],
+      [p(2, 0, 'path', { west: true })],
+    ]
+    const result = findPath(map, { x: 0, y: 0 }, { x: 2, y: 0 })
+
+    expect(result).toEqual([])
+  })
+
+  it("'river' は non-walkable として経由されない", () => {
+    const map: MapPanel[][] = [
+      [p(0, 0, 'path', { east: true })],
+      [p(1, 0, 'river', { west: true, east: true })],
+      [p(2, 0, 'path', { west: true })],
+    ]
+    const result = findPath(map, { x: 0, y: 0 }, { x: 2, y: 0 })
+
+    expect(result).toEqual([])
+  })
+})
+
+describe('findPath — 事故パターン', () => {
+  it('1ステップ経路（start の隣が goal）で cameFrom 復元が壊れないこと', () => {
+    const map: MapPanel[][] = [
+      [p(0, 0, 'path', { east: true })],
+      [p(1, 0, 'path', { west: true })],
+    ]
+    const result = findPath(map, { x: 0, y: 0 }, { x: 1, y: 0 })
+
+    expect(result).toEqual([{ x: 1, y: 0 }])
+  })
+})
+
+describe('EnemyState.route 初期化', () => {
+  it('createInitialGameState の各敵に route: [] が存在すること', () => {
+    const state = createInitialGameState()
+
+    for (const enemy of state.enemies) {
+      expect(Array.isArray(enemy.route)).toBe(true)
+      expect(enemy.route).toEqual([])
+    }
+  })
+})
+
+describe('実際のマップでの統合確認', () => {
+  it('generateMap(19, 25) でマップ端の path パネルから別の path パネルまで findPath が非空の経路を返すこと', () => {
+    const map = generateMap(19, 25)
+
+    // マップ端の walkable パネルを start にする（x=0, y=12 は edge path）
+    const start = { x: 0, y: 12 }
+    // マップ反対側の path パネルを goal にする（x=8, y=12 は端側の path）
+    const goal = { x: 6, y: 12 }
+
+    const result = findPath(map, start, goal)
+    expect(result.length).toBeGreaterThan(0)
+    expect(result[result.length - 1]).toEqual(goal)
   })
 })
