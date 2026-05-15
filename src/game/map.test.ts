@@ -227,6 +227,157 @@ describe('findPath — 事故パターン', () => {
   })
 })
 
+describe('generateMap — connections 構造検証（drawMap の描画前提）', () => {
+  // generateMap(19, 25): centerX=9, centerY=12
+  // player_house: map[9][12]
+  // station:      map[4][8]  (centerX-5=4, centerY-4=8)
+  // rail:         map[1..6][8] (centerX-8=1 〜 centerX-3=6, y=8)
+  // path col:     x=9 (centerX), y=12 (centerY), x=6 (centerX-3)
+
+  it('path パネルが隣接 path への connections を持つこと（north/south）', () => {
+    const map = generateMap(19, 25)
+
+    // x=9 (centerX) は縦 path。y=5 の上下は同じ path 列
+    const panel = map[9][5]
+    expect(panel.type).toBe('path')
+    // y=4 も path（centerX 列）、y=6 も path
+    expect(map[9][4].type).toBe('path')
+    expect(map[9][6].type).toBe('path')
+    expect(panel.connections.north).toBe(true)
+    expect(panel.connections.south).toBe(true)
+  })
+
+  it('path パネルが隣接 path への connections を持つこと（east/west）', () => {
+    const map = generateMap(19, 25)
+
+    // y=12 (centerY) は横 path 行。x=7, x=8, x=9 は連続 path
+    const panel = map[8][12]
+    expect(panel.type).toBe('path')
+    expect(map[7][12].type).toBe('path')
+    expect(map[9][12].type).toBe('player_house') // 隣は player_house（PATH_NETWORK）
+    expect(panel.connections.west).toBe(true)
+    expect(panel.connections.east).toBe(true) // player_house も PATH_NETWORK
+  })
+
+  it('rail パネルが隣接 rail への connections を持つこと（east/west）', () => {
+    const map = generateMap(19, 25)
+
+    // rail: x=1..6, y=8。中間の x=3 は両隣が rail
+    const panel = map[3][8]
+    expect(panel.type).toBe('rail')
+    expect(map[2][8].type).toBe('rail')
+    expect(map[4][8].type).toBe('station')
+    expect(panel.connections.west).toBe(true)
+    expect(panel.connections.east).toBe(true) // station も rail ネットワーク
+  })
+
+  it('rail パネルが path と接続しないこと（異ネットワーク）', () => {
+    const map = generateMap(19, 25)
+
+    // rail の x=6, y=8 の south: y=9 は path（centerX-3=6 列）
+    const panel = map[6][8]
+    expect(panel.type).toBe('rail')
+    expect(map[6][9].type).toBe('path')
+    expect(panel.connections.south).toBe(false)
+  })
+
+  it('station パネルが隣接 rail への connections を持つこと', () => {
+    const map = generateMap(19, 25)
+
+    // station: map[4][8]。x=3,y=8 は rail、x=5,y=8 は rail
+    const panel = map[4][8]
+    expect(panel.type).toBe('station')
+    expect(map[3][8].type).toBe('rail')
+    expect(map[5][8].type).toBe('rail')
+    expect(panel.connections.west).toBe(true)
+    expect(panel.connections.east).toBe(true)
+  })
+
+  it('station パネルが path と接続しないこと（異ネットワーク）', () => {
+    const map = generateMap(19, 25)
+
+    const panel = map[4][8]
+    expect(panel.type).toBe('station')
+    // north: map[4][7] は rice_field、south: map[4][9] も rice_field
+    expect(isNonConnectable(map[4][7].type)).toBe(true)
+    expect(panel.connections.north).toBe(false)
+    expect(panel.connections.south).toBe(false)
+  })
+
+  it('player_house が隣接 path からの接続を持つこと（#6 修正確認）', () => {
+    const map = generateMap(19, 25)
+
+    // player_house: map[9][12]
+    // north: map[9][11] は path（centerX 列）
+    const panel = map[9][12]
+    expect(panel.type).toBe('player_house')
+    expect(map[9][11].type).toBe('path')
+    expect(panel.connections.north).toBe(true)
+  })
+
+  it('player_house の connections は南方向に path がなければ false になること', () => {
+    const map = generateMap(19, 25)
+
+    // player_house: map[9][12]。south: map[9][13] は path（centerY 行）
+    const panel = map[9][12]
+    expect(map[9][13].type).toBe('path')
+    expect(panel.connections.south).toBe(true)
+  })
+
+  it('other_house が connections を一切持たないこと（non-connectable）', () => {
+    const map = generateMap(19, 25)
+
+    // other_house: map[2][17] (x=2, centerY+5=17)
+    const panel = map[2][17]
+    expect(panel.type).toBe('other_house')
+    expect(panel.connections.north).toBe(false)
+    expect(panel.connections.south).toBe(false)
+    expect(panel.connections.east).toBe(false)
+    expect(panel.connections.west).toBe(false)
+  })
+
+  it('water パネルが connections を持たないこと', () => {
+    const map = generateMap(19, 25)
+
+    // water: x > cols-5 (x >= 15), y < rows-8 (y <= 16)。map[15][5] は water
+    const panel = map[15][5]
+    expect(panel.type).toBe('water')
+    expect(panel.connections.north).toBe(false)
+    expect(panel.connections.south).toBe(false)
+    expect(panel.connections.east).toBe(false)
+    expect(panel.connections.west).toBe(false)
+  })
+
+  it('river パネルが connections を持たないこと', () => {
+    const map = generateMap(19, 25)
+
+    // river: x=cols-6=13, y < centerY+2=14。map[13][5] は river
+    const panel = map[13][5]
+    expect(panel.type).toBe('river')
+    expect(panel.connections.north).toBe(false)
+    expect(panel.connections.south).toBe(false)
+    expect(panel.connections.east).toBe(false)
+    expect(panel.connections.west).toBe(false)
+  })
+
+  it('rice_field パネルが connections を持たないこと', () => {
+    const map = generateMap(19, 25)
+
+    // rice_field: 上記以外の多くのセル。map[1][1] は rice_field
+    const panel = map[1][1]
+    expect(panel.type).toBe('rice_field')
+    expect(panel.connections.north).toBe(false)
+    expect(panel.connections.south).toBe(false)
+    expect(panel.connections.east).toBe(false)
+    expect(panel.connections.west).toBe(false)
+  })
+})
+
+// テスト内で使うローカルヘルパー
+function isNonConnectable(type: string): boolean {
+  return !['path', 'rail', 'station', 'player_house'].includes(type)
+}
+
 describe('EnemyState.route 初期化', () => {
   it('createInitialGameState の各敵に route: [] が存在すること', () => {
     const state = createInitialGameState()
