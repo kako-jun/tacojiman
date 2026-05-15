@@ -20,10 +20,10 @@ export function findPath(
   if (!startPanel || !goalPanel) return []
   if (!isWalkable(startPanel.type) || !isWalkable(goalPanel.type)) return []
 
-  type Node = { x: number; y: number; f: number; g: number }
+  type Node = { x: number; y: number; f: number }
   const key = (x: number, y: number) => `${x},${y}`
 
-  const openSet: Node[] = [{ x: start.x, y: start.y, f: heuristic(start, goal), g: 0 }]
+  const openSet: Node[] = [{ x: start.x, y: start.y, f: heuristic(start, goal) }]
   const cameFrom = new Map<string, { x: number; y: number }>()
   const gScore = new Map<string, number>()
   gScore.set(key(start.x, start.y), 0)
@@ -66,7 +66,7 @@ export function findPath(
         cameFrom.set(neighborKey, { x: current.x, y: current.y })
         gScore.set(neighborKey, tentativeG)
         const f = tentativeG + heuristic(neighbor, goal)
-        openSet.push({ x: neighbor.x, y: neighbor.y, f, g: tentativeG })
+        openSet.push({ x: neighbor.x, y: neighbor.y, f })
       }
     }
   }
@@ -150,5 +150,6 @@ function isSameNetwork(
   // path と player_house は同一ネットワーク
   const pathNetwork = new Set<PanelType>(['path', 'player_house'])
   if (pathNetwork.has(current)) return pathNetwork.has(other)
-  return other === current
+  // isConnectable を通過した型は上記で網羅済み
+  return false
 }
