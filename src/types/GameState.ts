@@ -52,6 +52,15 @@ export interface CameraState {
   scale: number
 }
 
+export type Direction = 'north' | 'south' | 'east' | 'west'
+
+export interface PlayerState {
+  panelX: number
+  panelY: number
+  direction: Direction
+  isMoving: boolean
+}
+
 export interface GameState {
   version: 1
   elapsedMs: number
@@ -66,6 +75,7 @@ export interface GameState {
   camera: CameraState
   takokongSpawned: boolean
   phase: 'ready' | 'playing' | 'ending'
+  player: PlayerState
 }
 
 export const VIEW_WIDTH = 400
@@ -99,6 +109,12 @@ export function createInitialGameState(): GameState {
     camera: { x: VIEW_WIDTH / 2, y: VIEW_HEIGHT / 2, scale: 1 },
     takokongSpawned: false,
     phase: 'ready',
+    player: {
+      panelX: 9,
+      panelY: 12,
+      direction: 'south',
+      isMoving: false,
+    },
   }
 }
 
