@@ -139,6 +139,8 @@ function isConnectable(type: PanelType): boolean {
   return type === 'path' || type === 'rail' || type === 'station' || type === 'player_house'
 }
 
+const PATH_NETWORK = new Set<PanelType>(['path', 'player_house'])
+
 function isSameNetwork(
   other: PanelType | undefined,
   current: PanelType
@@ -148,8 +150,7 @@ function isSameNetwork(
     return other === 'rail' || other === 'station'
   }
   // path と player_house は同一ネットワーク
-  const pathNetwork = new Set<PanelType>(['path', 'player_house'])
-  if (pathNetwork.has(current)) return pathNetwork.has(other)
+  if (PATH_NETWORK.has(current)) return PATH_NETWORK.has(other)
   // isConnectable を通過した型は上記で網羅済み
   return false
 }
