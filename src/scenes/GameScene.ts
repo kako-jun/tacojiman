@@ -6,6 +6,7 @@ import {
   TILE_SIZE,
   VIEW_HEIGHT,
   VIEW_WIDTH,
+  type BombType,
   type Direction,
   type EnemyState,
   type GameState,
@@ -14,12 +15,14 @@ import {
 import { findPath } from '../game/map'
 import { KeyboardManager } from '../game/KeyboardManager'
 import { spawnEnemies } from '../game/EnemyManager'
+import { applyBombDamage } from '../game/BombJutsu'
 
 export class GameScene extends Container {
   private state: GameState | null = null
   private readonly mapLayer = new Container()
   private readonly enemyLayer = new Container()
   private readonly playerLayer = new Container()
+  private readonly effectLayer = new Container()
   private readonly uiLayer = new Container()
   private readonly mapGraphics = new Graphics()
   private readonly enemyGraphics = new Graphics()
@@ -54,6 +57,7 @@ export class GameScene extends Container {
     this.mapLayer.addChild(this.enemyLayer)
     this.playerLayer.addChild(this.playerGraphics)
     this.mapLayer.addChild(this.playerLayer)
+    this.mapLayer.addChild(this.effectLayer)
     this.addChild(this.mapLayer, this.uiLayer)
     this.clockText.x = 14
     this.clockText.y = 12
@@ -142,6 +146,22 @@ export class GameScene extends Container {
     this.drawEnemies()
     this.drawUi()
     this.tryMovePlayer()
+
+    // B キーでランダムボムを発動（開発テスト用）
+    if (this.keyboard?.getBombKey()) {
+      const bombs: BombType[] = [
+        'proton',
+        'muddy',
+        'sentry',
+        'muteki',
+        'sol',
+        'dainsleif',
+        'jakuhou',
+        'bunshin',
+      ]
+      const type = bombs[Math.floor(Math.random() * bombs.length)]
+      this.activateBomb(type)
+    }
   }
 
   private draw(): void {
@@ -478,6 +498,317 @@ export class GameScene extends Container {
         state.player.isMoving = false
       },
     })
+  }
+
+  activateBomb(type: BombType): void {
+    const state = this.requireState()
+    // ダメージ計算（muddy/sentry/bunshin はダメージなし）
+    applyBombDamage(state, type)
+    // エフェクト描画
+    switch (type) {
+      case 'proton':
+        this.effectProton()
+        break
+      case 'muddy':
+        this.effectMuddy()
+        break
+      case 'sentry':
+        this.effectSentry()
+        break
+      case 'muteki':
+        this.effectMuteki()
+        break
+      case 'sol':
+        this.effectSol()
+        break
+      case 'dainsleif':
+        this.effectDainsleif()
+        break
+      case 'jakuhou':
+        this.effectJakuhou()
+        break
+      case 'bunshin':
+        this.effectBunshin()
+        break
+    }
+  }
+
+  // proton（浦恋菊流怒之術）: 白い大円が膨張 + 横長ビーム
+  private effectProton(): void {
+    // 大円が 0→200px に膨張してフェードアウト（0.5s）
+    const circle = new Graphics()
+    this.effectLayer.addChild(circle)
+    circle.circle(0, 0, 10)
+    circle.fill(0xffffff)
+    gsap.to(circle.scale, {
+      x: 20,
+      y: 20,
+      duration: 0.5,
+    })
+    gsap.to(circle, {
+      alpha: 0,
+      duration: 0.5,
+      onComplete: () => circle.destroy(),
+    })
+
+    // 横長ビーム矩形（全幅×20px）が中央を横断してフェードアウト（0.8s）
+    const beam = new Graphics()
+    this.effectLayer.addChild(beam)
+    beam.rect(-600, -10, 1200, 20)
+    beam.fill(0xffffff)
+    gsap.to(beam, {
+      alpha: 0,
+      duration: 0.8,
+      onComplete: () => beam.destroy(),
+    })
+  }
+
+  // muddy（埋弟盆流怒之術）: 茶色円が点滅後フェードアウト
+  private effectMuddy(): void {
+    const g = new Graphics()
+    this.effectLayer.addChild(g)
+    g.circle(0, 0, 8)
+    g.fill(0x8b4513)
+    // 2秒間点滅
+    gsap.to(g, {
+      alpha: 0.2,
+      duration: 0.25,
+      repeat: 7,
+      yoyo: true,
+      onComplete: () => {
+        gsap.to(g, {
+          alpha: 0,
+          duration: 0.3,
+          onComplete: () => g.destroy(),
+        })
+      },
+    })
+  }
+
+  // sentry（千鳥臥流怒之術）: 灰色矩形が5秒間回転後フェードアウト
+  private effectSentry(): void {
+    const g = new Graphics()
+    this.effectLayer.addChild(g)
+    g.rect(-10, -10, 20, 20)
+    g.fill(0x888888)
+    gsap.to(g, {
+      rotation: Math.PI * 4,
+      duration: 5,
+      ease: 'none',
+    })
+    gsap.to(g, {
+      alpha: 0,
+      duration: 0.5,
+      delay: 4.5,
+      onComplete: () => g.destroy(),
+    })
+  }
+
+  // muteki（無敵砲台）: 大フラッシュ円 + 5箇所ランダム爆発
+  private effectMuteki(): void {
+    // 白い大フラッシュ円（radius 5→100、0.3s）
+    const flash = new Graphics()
+    this.effectLayer.addChild(flash)
+    flash.circle(0, 0, 5)
+    flash.fill(0xffffff)
+    gsap.to(flash.scale, {
+      x: 20,
+      y: 20,
+      duration: 0.3,
+    })
+    gsap.to(flash, {
+      alpha: 0,
+      duration: 0.3,
+      onComplete: () => flash.destroy(),
+    })
+
+    // 5箇所にランダム爆発円（0.1s ずらし）
+    for (let i = 0; i < 5; i++) {
+      const rx = (Math.random() - 0.5) * 400
+      const ry = (Math.random() - 0.5) * 400
+      const exp = new Graphics()
+      exp.x = rx
+      exp.y = ry
+      this.effectLayer.addChild(exp)
+      exp.circle(0, 0, 30)
+      exp.fill(0xff6600)
+      gsap.to(exp, {
+        alpha: 0,
+        duration: 0.4,
+        delay: 0.1 * i,
+        onComplete: () => exp.destroy(),
+      })
+    }
+  }
+
+  // sol（SOL攻撃）: ターゲットサークル点滅 + 白ビーム柱降下 + 爆発円
+  private effectSol(): void {
+    // 赤いターゲットサークル（radius 60）点滅（2s）
+    const target = new Graphics()
+    this.effectLayer.addChild(target)
+    target.circle(0, 0, 60)
+    target.stroke({ color: 0xff0000, width: 3 })
+    gsap.to(target, {
+      alpha: 0.2,
+      duration: 0.25,
+      repeat: 7,
+      yoyo: true,
+      onComplete: () => target.destroy(),
+    })
+
+    // 縦の白いビーム柱（幅30×高500）が上から降下（0.5s）
+    const beam = new Graphics()
+    beam.x = 0
+    beam.y = -500
+    this.effectLayer.addChild(beam)
+    beam.rect(-15, 0, 30, 500)
+    beam.fill(0xffffff)
+    gsap.to(beam, {
+      y: 0,
+      duration: 0.5,
+      delay: 1.5,
+      onComplete: () => {
+        // 爆発円（radius 80、0.8s フェードアウト）
+        const exp = new Graphics()
+        this.effectLayer.addChild(exp)
+        exp.circle(0, 0, 10)
+        exp.fill(0xff4400)
+        gsap.to(exp.scale, { x: 8, y: 8, duration: 0.8 })
+        gsap.to(exp, {
+          alpha: 0,
+          duration: 0.8,
+          onComplete: () => exp.destroy(),
+        })
+        beam.destroy()
+      },
+    })
+  }
+
+  // dainsleif（ダインスレイブ）: 紫チャージ円 + 斜め矩形
+  private effectDainsleif(): void {
+    // 紫のチャージ円（radius 15→30、1s）
+    const charge = new Graphics()
+    this.effectLayer.addChild(charge)
+    charge.circle(0, 0, 15)
+    charge.fill(0x9900cc)
+    gsap.to(charge.scale, { x: 2, y: 2, duration: 1 })
+    gsap.to(charge, {
+      alpha: 0,
+      duration: 0.3,
+      delay: 0.8,
+      onComplete: () => charge.destroy(),
+    })
+
+    // 細い紫の矩形（幅8、長400）が斜め方向に伸びる（0.5s）
+    const beam = new Graphics()
+    beam.rotation = Math.PI / 4
+    beam.scale.x = 0
+    this.effectLayer.addChild(beam)
+    beam.rect(-4, 0, 8, 400)
+    beam.fill(0x9900cc)
+    gsap.to(beam.scale, {
+      x: 1,
+      duration: 0.5,
+      delay: 0.8,
+    })
+    gsap.to(beam, {
+      alpha: 0,
+      duration: 0.3,
+      delay: 1.2,
+      onComplete: () => beam.destroy(),
+    })
+  }
+
+  // jakuhou（じゃくほうらいこうべんの術）: ミサイル降下 + 大爆発 + 衝撃波3つ
+  private effectJakuhou(): void {
+    // 金色の縦長矩形（ミサイル形 30×80）が上から降下（0.3s）
+    const missile = new Graphics()
+    missile.x = 0
+    missile.y = -300
+    this.effectLayer.addChild(missile)
+    missile.rect(-15, 0, 30, 80)
+    missile.fill(0xffd700)
+    gsap.to(missile, {
+      y: -80,
+      duration: 0.3,
+      onComplete: () => {
+        missile.destroy()
+        // 白い大爆発円（radius 10→80、0.6s フェードアウト）
+        const exp = new Graphics()
+        this.effectLayer.addChild(exp)
+        exp.circle(0, 0, 10)
+        exp.fill(0xffffff)
+        gsap.to(exp.scale, { x: 8, y: 8, duration: 0.6 })
+        gsap.to(exp, {
+          alpha: 0,
+          duration: 0.6,
+          onComplete: () => exp.destroy(),
+        })
+
+        // 衝撃波3つ（0.15s ずらして順次拡大）
+        for (let i = 0; i < 3; i++) {
+          const wave = new Graphics()
+          this.effectLayer.addChild(wave)
+          wave.circle(0, 0, 10)
+          wave.stroke({ color: 0xffd700, width: 3 })
+          gsap.to(wave.scale, {
+            x: 12,
+            y: 12,
+            duration: 0.5,
+            delay: 0.15 * i,
+          })
+          gsap.to(wave, {
+            alpha: 0,
+            duration: 0.5,
+            delay: 0.15 * i,
+            onComplete: () => wave.destroy(),
+          })
+        }
+      },
+    })
+  }
+
+  // bunshin（分身の術）: 煙エフェクト + 分身布団2つ点滅
+  private effectBunshin(): void {
+    // 灰色の煙エフェクト（radius 0→60、0.6s フェードアウト）
+    const smoke = new Graphics()
+    this.effectLayer.addChild(smoke)
+    smoke.circle(0, 0, 5)
+    smoke.fill(0x999999)
+    gsap.to(smoke.scale, { x: 12, y: 12, duration: 0.6 })
+    gsap.to(smoke, {
+      alpha: 0,
+      duration: 0.6,
+      onComplete: () => smoke.destroy(),
+    })
+
+    // 2箇所に青い矩形（分身布団、40×40）が出現し5秒間点滅後フェードアウト
+    const offsets = [
+      { x: -60, y: -60 },
+      { x: 60, y: 60 },
+    ]
+    for (const offset of offsets) {
+      const futon = new Graphics()
+      futon.x = offset.x
+      futon.y = offset.y
+      this.effectLayer.addChild(futon)
+      futon.rect(-20, -20, 40, 40)
+      futon.fill(0x3a7abf)
+      gsap.to(futon, {
+        alpha: 0.3,
+        duration: 0.4,
+        repeat: 11,
+        yoyo: true,
+        delay: 0.5,
+        onComplete: () => {
+          gsap.to(futon, {
+            alpha: 0,
+            duration: 0.5,
+            onComplete: () => futon.destroy(),
+          })
+        },
+      })
+    }
   }
 
   private drawPlayer(direction: Direction): void {
