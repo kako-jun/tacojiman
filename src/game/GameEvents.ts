@@ -64,6 +64,10 @@ export class GameEventEmitter {
     this.handlers.get(event)?.forEach(h => h(payload))
   }
 
+  removeAllListeners<K extends GameEventName>(event: K): void {
+    this.handlers.set(event, [])
+  }
+
   clear(): void {
     this.handlers.clear()
   }
