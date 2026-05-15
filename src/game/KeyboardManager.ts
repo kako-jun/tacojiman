@@ -28,6 +28,10 @@ export class KeyboardManager {
     return this.keys.has(key)
   }
 
+  getBombKey(): boolean {
+    return this.isPressed('b') || this.isPressed('B') || this.isPressed(' ')
+  }
+
   getDirection(): Direction | null {
     if (this.isPressed('ArrowUp') || this.isPressed('w') || this.isPressed('W'))
       return 'north'
