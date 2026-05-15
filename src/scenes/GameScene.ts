@@ -19,6 +19,7 @@ import { applyBombDamage } from '../game/BombJutsu'
 import { calcShakeOffset, applyZoom } from '../game/CameraController'
 import { GameEventEmitter } from '../game/GameEvents'
 import { EffectManager } from './EffectManager'
+import { SoundManager } from '../game/SoundManager'
 
 export class GameScene extends Container {
   private state: GameState | null = null
@@ -32,8 +33,10 @@ export class GameScene extends Container {
   private readonly playerGraphics = new Graphics()
   private keyboard: KeyboardManager | null = null
   private takokongDefeated = false
+  private takokongBgmStarted = false
   private readonly events = new GameEventEmitter()
   private effectManager: EffectManager | null = null
+  private sound: SoundManager | null = null
   private readonly clockText = new Text({
     text: '7:00 AM',
     style: {
@@ -130,9 +133,14 @@ export class GameScene extends Container {
     // EffectManager を生成（mapLayer の子として設定）
     this.effectManager = new EffectManager(this.mapLayer)
 
+    // SoundManager を生成して環境音を開始
+    this.sound = new SoundManager()
+    this.sound.startAmbient()
+
     // score-gain イベントのハンドラを登録
     this.events.on('score-gain', (e) => {
       this.effectManager?.showScoreGain(e)
+      this.sound?.playSe('se_score')
     })
 
     // プレイヤーの初期ピクセル座標を計算
@@ -235,6 +243,12 @@ export class GameScene extends Container {
         state.camera.scale = 1
         this.mapLayer.scale.set(1)
       }
+    }
+
+    // takokong スポーン時に BGM を開始（1回のみ）
+    if (state.takokongSpawned && !this.takokongBgmStarted) {
+      this.takokongBgmStarted = true
+      this.sound?.playTakokongBgm()
     }
 
     this.drawEnemies()
@@ -596,6 +610,7 @@ export class GameScene extends Container {
   override destroy(): void {
     this.keyboard?.destroy()
     this.effectManager?.destroy()
+    this.sound?.stopAll()
     this.events.clear()
     super.destroy()
   }
@@ -662,6 +677,7 @@ export class GameScene extends Container {
 
   activateBomb(type: BombType): void {
     const state = this.requireState()
+    this.sound?.playSe('se_bomb')
     // ダメージ計算（muddy/sentry/bunshin はダメージなし）
     const result = applyBombDamage(state, type)
     // スコア加算と score-gain イベント emit
