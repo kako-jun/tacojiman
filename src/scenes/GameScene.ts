@@ -118,13 +118,101 @@ export class GameScene extends Container {
       for (const panel of col) {
         const x = offsetX + panel.x * TILE_SIZE
         const y = offsetY + panel.y * TILE_SIZE
+        // ベース矩形
         this.mapGraphics.rect(x, y, TILE_SIZE - 1, TILE_SIZE - 1)
         this.mapGraphics.fill(PANEL_COLORS[panel.type])
-        if (panel.type === 'player_house') {
+
+        const cx = x + TILE_SIZE / 2
+        const cy = y + TILE_SIZE / 2
+
+        if (panel.type === 'path') {
+          // 接続方向への道路線（幅 8px）
+          this.drawConnectionLines(cx, cy, x, y, panel.connections, 8, COLORS.pathLine)
+        } else if (panel.type === 'rail') {
+          // 接続方向への線路線（幅 6px）
+          this.drawConnectionLines(cx, cy, x, y, panel.connections, 6, COLORS.railLine)
+          // 枕木（4px × 10px を中心付近に 3 本）
+          const sleeperOffsets = [-6, 0, 6]
+          for (const off of sleeperOffsets) {
+            this.mapGraphics.rect(cx - 5, cy + off - 2, 10, 4)
+            this.mapGraphics.fill(COLORS.railSleeper)
+          }
+        } else if (panel.type === 'station') {
+          // 接続方向への線（rail と同色・同幅）
+          this.drawConnectionLines(cx, cy, x, y, panel.connections, 6, COLORS.railLine)
+          // プラットフォーム矩形（中央寄り 70%）
+          const platformW = (TILE_SIZE - 1) * 0.7
+          const platformH = (TILE_SIZE - 1) * 0.7
+          this.mapGraphics.rect(
+            cx - platformW / 2,
+            cy - platformH / 2,
+            platformW,
+            platformH
+          )
+          this.mapGraphics.fill(COLORS.stationPlatform)
+        } else if (panel.type === 'player_house') {
+          // 家らしい内側矩形（木の色）
           this.mapGraphics.rect(x + 5, y + 5, TILE_SIZE - 10, TILE_SIZE - 10)
-          this.mapGraphics.fill(0x202020)
+          this.mapGraphics.fill(COLORS.playerHouseWood)
+          // 接続している path 方向に玄関（4px 幅の明るい線）
+          const half = 4 / 2
+          if (panel.connections.north) {
+            this.mapGraphics.rect(cx - half, y, half * 2, 5)
+            this.mapGraphics.fill(COLORS.playerHouseDoor)
+          }
+          if (panel.connections.south) {
+            this.mapGraphics.rect(cx - half, y + TILE_SIZE - 6, half * 2, 5)
+            this.mapGraphics.fill(COLORS.playerHouseDoor)
+          }
+          if (panel.connections.east) {
+            this.mapGraphics.rect(x + TILE_SIZE - 6, cy - half, 5, half * 2)
+            this.mapGraphics.fill(COLORS.playerHouseDoor)
+          }
+          if (panel.connections.west) {
+            this.mapGraphics.rect(x, cy - half, 5, half * 2)
+            this.mapGraphics.fill(COLORS.playerHouseDoor)
+          }
+        } else if (panel.type === 'other_house') {
+          // 屋根風の内側矩形
+          const roofW = (TILE_SIZE - 1) * 0.6
+          const roofH = (TILE_SIZE - 1) * 0.35
+          this.mapGraphics.rect(
+            cx - roofW / 2,
+            y + 3,
+            roofW,
+            roofH
+          )
+          this.mapGraphics.fill(COLORS.otherHouseRoof)
         }
       }
+    }
+  }
+
+  private drawConnectionLines(
+    cx: number,
+    cy: number,
+    x: number,
+    y: number,
+    connections: MapPanel['connections'],
+    lineWidth: number,
+    color: number
+  ): void {
+    const half = lineWidth / 2
+    if (connections.north) {
+      this.mapGraphics.rect(cx - half, y, half * 2, TILE_SIZE / 2)
+      this.mapGraphics.fill(color)
+    }
+    if (connections.south) {
+      this.mapGraphics.rect(cx - half, cy, half * 2, TILE_SIZE / 2)
+      this.mapGraphics.fill(color)
+    }
+    if (connections.east) {
+      this.mapGraphics.rect(cx, cy - half, TILE_SIZE / 2, half * 2)
+      this.mapGraphics.fill(color)
+    }
+    if (connections.west) {
+      this.mapGraphics.rect(x, cy - half, TILE_SIZE / 2, half * 2)
+      this.mapGraphics.fill(color)
     }
   }
 
