@@ -16,12 +16,16 @@ export const ENEMY_SPECS: Record<EnemyType, EnemySpec> = {
   takokong: { type: 'takokong', speed: 0.8, baseHp: 42, score: 10 },
 }
 
-let nextId = 1
-
 function makeId(type: EnemyType): string {
-  return `${type}-${nextId++}`
+  return `${type}-${globalThis.crypto.randomUUID()}`
 }
 
+const GROUND_WATER_UNDERGROUND_INTERVAL = 30_000
+
+/**
+ * 経過時間に応じて新たにスポーンすべき敵を返す。
+ * 副作用: state.spawnTimer と state.takokongSpawned を直接書き換える。
+ */
 export function spawnEnemies(state: GameState, deltaMS: number): EnemyState[] {
   const result: EnemyState[] = []
   const map = state.map
@@ -36,10 +40,9 @@ export function spawnEnemies(state: GameState, deltaMS: number): EnemyState[] {
   const nextTimer = prevTimer + deltaMS
 
   // ground: 30秒ごと（30000ms）
-  const groundInterval = 30_000
   if (
-    Math.floor(prevTimer / groundInterval) <
-    Math.floor(nextTimer / groundInterval)
+    Math.floor(prevTimer / GROUND_WATER_UNDERGROUND_INTERVAL) <
+    Math.floor(nextTimer / GROUND_WATER_UNDERGROUND_INTERVAL)
   ) {
     const startPanels = map.flat().filter((p) => p.type === 'path' && p.x === 0)
     if (startPanels.length > 0) {
@@ -59,10 +62,9 @@ export function spawnEnemies(state: GameState, deltaMS: number): EnemyState[] {
   }
 
   // water: 30秒ごと
-  const waterInterval = 30_000
   if (
-    Math.floor(prevTimer / waterInterval) <
-    Math.floor(nextTimer / waterInterval)
+    Math.floor(prevTimer / GROUND_WATER_UNDERGROUND_INTERVAL) <
+    Math.floor(nextTimer / GROUND_WATER_UNDERGROUND_INTERVAL)
   ) {
     const startPanels = map
       .flat()
@@ -84,10 +86,9 @@ export function spawnEnemies(state: GameState, deltaMS: number): EnemyState[] {
   }
 
   // underground: 30秒ごと
-  const undergroundInterval = 30_000
   if (
-    Math.floor(prevTimer / undergroundInterval) <
-    Math.floor(nextTimer / undergroundInterval)
+    Math.floor(prevTimer / GROUND_WATER_UNDERGROUND_INTERVAL) <
+    Math.floor(nextTimer / GROUND_WATER_UNDERGROUND_INTERVAL)
   ) {
     const startPanels = map.flat().filter((p) => p.type === 'rice_field')
     if (startPanels.length > 0) {

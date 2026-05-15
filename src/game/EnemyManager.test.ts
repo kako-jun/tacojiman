@@ -48,6 +48,15 @@ function makeAllPathMap(): MapPanel[][] {
   ]
 }
 
+// water パネルが y=0 に存在するマップ
+function makeWaterY0Map(): MapPanel[][] {
+  return [
+    [
+      { x: 0, y: 0, type: 'water', connections: { north: false, south: false, east: false, west: false } },
+    ],
+  ]
+}
+
 describe('ENEMY_SPECS', () => {
   it('全5種のエントリがある', () => {
     const keys = Object.keys(ENEMY_SPECS)
@@ -102,7 +111,7 @@ describe('spawnEnemies — 境界値・異常系', () => {
     expect(state.spawnTimer).toBe(0)
   })
 
-  it('spawnTimer=30000 から delta=0 ではスポーンしない（境界：floor(30000/30000)<floor(30000/30000) は偽）', () => {
+  it('タイマーが閾値ちょうどの状態で delta=0 ではスポーンしない', () => {
     const state = makeMinimalState({ spawnTimer: 30_000 })
     const result = spawnEnemies(state, 0)
     const grounds = result.filter((e) => e.type === 'ground')
@@ -166,6 +175,37 @@ describe('spawnEnemies — マップ条件が満たされないときクラッ�
     const result = spawnEnemies(state, 1)
     const undergrounds = result.filter((e) => e.type === 'underground')
     expect(undergrounds).toHaveLength(0)
+  })
+})
+
+// ─── water スポーン ───────────────────────────────────────────────
+
+describe('spawnEnemies — water スポーン', () => {
+  it('water パネル(y=0)が存在するマップで water がスポーンする', () => {
+    const state = makeMinimalState({
+      map: makeWaterY0Map(),
+      spawnTimer: 29_999,
+    })
+    const result = spawnEnemies(state, 1)
+    const waters = result.filter((e) => e.type === 'water')
+    expect(waters.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('water パネルが y=0 でない場合は water がスポーンしない', () => {
+    // y=1 の water パネル（フィルタ条件 p.y === 0 を満たさない）
+    const mapWithWaterY1: MapPanel[][] = [
+      [
+        { x: 0, y: 0, type: 'path', connections: { north: false, south: false, east: false, west: false } },
+        { x: 0, y: 1, type: 'water', connections: { north: false, south: false, east: false, west: false } },
+      ],
+    ]
+    const state = makeMinimalState({
+      map: mapWithWaterY1,
+      spawnTimer: 29_999,
+    })
+    const result = spawnEnemies(state, 1)
+    const waters = result.filter((e) => e.type === 'water')
+    expect(waters).toHaveLength(0)
   })
 })
 

@@ -301,14 +301,12 @@ export class GameScene extends Container {
       const size = enemy.hp > 1 ? 24 : 20
       this.enemyGraphics.rect(x - size / 2, y - size / 2, size, size)
       this.enemyGraphics.fill(color)
-      this.enemyGraphics.rect(x - size / 2, y - size / 2, size, size)
       this.enemyGraphics.stroke({ color: 0xffffff, width: 2 })
     } else if (enemy.type === 'water') {
       // 円 (hp2:radius=13, hp1:radius=10)
       const radius = enemy.hp > 1 ? 13 : 10
       this.enemyGraphics.circle(x, y, radius)
       this.enemyGraphics.fill(color)
-      this.enemyGraphics.circle(x, y, radius)
       this.enemyGraphics.stroke({ color: 0xffffff, width: 2 })
     } else if (enemy.type === 'air') {
       // 三角形
@@ -322,14 +320,6 @@ export class GameScene extends Container {
         y + size,
       ])
       this.enemyGraphics.fill(color)
-      this.enemyGraphics.poly([
-        x,
-        y - size,
-        x + size,
-        y + size,
-        x - size,
-        y + size,
-      ])
       this.enemyGraphics.stroke({ color: 0xffffff, width: 2 })
     } else if (enemy.type === 'underground') {
       // 菱形
@@ -345,16 +335,6 @@ export class GameScene extends Container {
         y,
       ])
       this.enemyGraphics.fill(color)
-      this.enemyGraphics.poly([
-        x,
-        y - size,
-        x + size,
-        y,
-        x,
-        y + size,
-        x - size,
-        y,
-      ])
       this.enemyGraphics.stroke({ color: 0xffffff, width: 2 })
     } else {
       // takokong: 大円 radius=22 + 白縁 + 紫オーラ円 radius=28
@@ -384,32 +364,53 @@ export class GameScene extends Container {
     const offsetX = -width / 2
     const offsetY = -height / 2
 
-    for (const enemy of state.enemies) {
-      if (enemy.route.length === 0) continue
+    for (let i = state.enemies.length - 1; i >= 0; i--) {
+      const enemy = state.enemies[i]
+      if (enemy.route.length > 0) {
+        enemy.routeProgress = Math.min(
+          1,
+          enemy.routeProgress +
+            (deltaMS * enemy.speed) / 1000 / enemy.route.length
+        )
+        const t = enemy.routeProgress * enemy.route.length
+        const segIndex = Math.min(Math.floor(t), enemy.route.length - 1)
+        const segT = t - segIndex
 
-      enemy.routeProgress = Math.min(
-        1,
-        enemy.routeProgress +
-          (deltaMS * enemy.speed) / 1000 / enemy.route.length
-      )
-      const t = enemy.routeProgress * enemy.route.length
-      const segIndex = Math.min(Math.floor(t), enemy.route.length - 1)
-      const segT = t - segIndex
+        const toPixel = (panel: { x: number; y: number }) => ({
+          px: panel.x * TILE_SIZE + TILE_SIZE / 2 + offsetX,
+          py: panel.y * TILE_SIZE + TILE_SIZE / 2 + offsetY,
+        })
 
-      const toPixel = (panel: { x: number; y: number }) => ({
-        px: panel.x * TILE_SIZE + TILE_SIZE / 2 + offsetX,
-        py: panel.y * TILE_SIZE + TILE_SIZE / 2 + offsetY,
-      })
-
-      if (segIndex >= enemy.route.length - 1) {
-        const last = toPixel(enemy.route[enemy.route.length - 1])
-        enemy.x = last.px
-        enemy.y = last.py
+        if (segIndex >= enemy.route.length - 1) {
+          const last = toPixel(enemy.route[enemy.route.length - 1])
+          enemy.x = last.px
+          enemy.y = last.py
+        } else {
+          const from = toPixel(enemy.route[segIndex])
+          const to = toPixel(enemy.route[segIndex + 1])
+          enemy.x = from.px + (to.px - from.px) * segT
+          enemy.y = from.py + (to.py - from.py) * segT
+        }
       } else {
-        const from = toPixel(enemy.route[segIndex])
-        const to = toPixel(enemy.route[segIndex + 1])
-        enemy.x = from.px + (to.px - from.px) * segT
-        enemy.y = from.py + (to.py - from.py) * segT
+        // air: 左から右へ直線移動
+        if (enemy.type === 'air') {
+          enemy.x += enemy.speed * deltaMS * 0.08
+          const rightEdge = width / 2 + 200
+          if (enemy.x > rightEdge) {
+            state.enemies.splice(i, 1)
+          }
+        }
+        // takokong: player_house に向かって直進（x=0, y=0 つまり mapLayer 中心）
+        else if (enemy.type === 'takokong') {
+          const dx = 0 - enemy.x
+          const dy = 0 - enemy.y
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          if (dist > 1) {
+            const norm = (enemy.speed * deltaMS * 0.05) / dist
+            enemy.x += dx * norm
+            enemy.y += dy * norm
+          }
+        }
       }
     }
   }
