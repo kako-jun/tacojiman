@@ -1,6 +1,6 @@
 import type { EnemyState, EnemyType, GameState, MapPanel } from '../types/GameState'
 import { TILE_SIZE } from '../types/GameState'
-import { findPathEdgePosition, findWaterGoalPanel } from './map'
+import { findPathEdgePosition, findWaterGoalPanel, findWaterPath } from './map'
 
 export interface EnemySpec {
   type: EnemyType
@@ -124,37 +124,56 @@ function makeGroundEnemy(ctx: SpawnContext): EnemyState | null {
 }
 
 /**
- * 水タコのスポーン位置（家から最も遠い water/river タイル）を返す。
- * river の終端 or マップ端の water からの出現を再現する。
+ * 水タコのスポーン位置を返す。
+ * 家からマンハッタン距離が遠い water/river（上位 30%）の中から、
+ * waterGoal まで A* で到達可能なタイルをランダムに選ぶ（S1）。
+ * 到達可能な候補がなければ null（S2）。
+ * 「river の終端 or マップ端の water からの出現」を、毎回ランダム化して再現する。
  */
-function makeWaterEnemy(ctx: SpawnContext): EnemyState | null {
+function makeWaterEnemy(
+  ctx: SpawnContext,
+  rand: () => number = Math.random,
+  waterGoal: { x: number; y: number } | null = null
+): EnemyState | null {
   if (!ctx.goalPanel) return null
   const cols = ctx.map.length
   const rows = ctx.map[0]?.length ?? 0
 
-  // 家からマンハッタン距離が最大の water/river を選ぶ
-  let best: { x: number; y: number; d: number } | null = null
+  // water/river 全タイルと家からのマンハッタン距離を収集
+  const all: Array<{ x: number; y: number; d: number }> = []
   for (let x = 0; x < cols; x++) {
     for (let y = 0; y < rows; y++) {
       const panel = ctx.map[x][y]
       if (!panel) continue
       if (panel.type !== 'water' && panel.type !== 'river') continue
       const d = Math.abs(x - ctx.goalPanel.x) + Math.abs(y - ctx.goalPanel.y)
-      if (best === null || d > best.d) {
-        best = { x, y, d }
-      }
+      all.push({ x, y, d })
     }
   }
-  if (best === null) return null
+  if (all.length === 0) return null
 
   // ゴール（家に最寄りの water/river パネル）が存在するか確認
-  const waterGoal = findWaterGoalPanel(ctx.map, {
-    x: ctx.goalPanel.x,
-    y: ctx.goalPanel.y,
-  })
-  if (waterGoal === null) return null
+  const goal =
+    waterGoal ??
+    findWaterGoalPanel(ctx.map, {
+      x: ctx.goalPanel.x,
+      y: ctx.goalPanel.y,
+    })
+  if (goal === null) return null
 
-  const { x, y } = panelToPixel(best, ctx)
+  // マンハッタン降順上位 30% を候補にする（S1: 複数候補からランダム）
+  all.sort((a, b) => b.d - a.d)
+  const topN = Math.max(1, Math.ceil(all.length * 0.3))
+  const top = all.slice(0, topN)
+
+  // 到達可能なものだけ残す（S2）
+  const reachable = top.filter(
+    (c) => findWaterPath(ctx.map, { x: c.x, y: c.y }, goal).length > 0
+  )
+  if (reachable.length === 0) return null
+
+  const picked = reachable[Math.floor(rand() * reachable.length)]
+  const { x, y } = panelToPixel(picked, ctx)
   return makeEnemy('water', x, y)
 }
 
