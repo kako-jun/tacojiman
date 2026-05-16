@@ -291,7 +291,7 @@
 - **状態と描画の分離**: `GameState` はプレーンなシリアライズ可能オブジェクトにし、PixiJSの `Container` / `Graphics` を持ち込まない
 - **任意局面起動**: `GameScene.initWithState(state: GameState)` でデバッグ用の局面再現を可能にする
 - **フォルダ構成**: amanuma と同じく `src/game`（ロジック）/ `src/scenes`（描画）/ `src/types`（状態型）/ `src/constants`（定数）へ分離
-- **旧実装の扱い**: Phaser 版は `legacy/phaser-src/` に退避し、移植漏れ確認の参照に使う
+- **旧実装の扱い**: Phaser 版は PixiJS 移植完了に伴い削除済み（履歴は `git show e656fd6:...` で参照可能）
 - **科学 vs 忍術の構図**: 幼馴染（タコ型ロボット軍団）vs プレイヤー（蜂忍術）
 - **ワンボタン制約**: タップ・長押し・離すのみで全操作
 - **マップ生成システム**: 能登半島風地形マスのランダム配置
