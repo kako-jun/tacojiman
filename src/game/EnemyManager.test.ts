@@ -455,29 +455,32 @@ describe('spawnEnemies — 初期 3 体スポーンのバグ修正凍結', () =>
 // ─── 観点7-8: 初期スポーンと通常スポーンの同時発火 ───────────────
 
 describe('spawnEnemies — 初期 × 通常スポーンの同時発火', () => {
-  it('createInitialGameState + spawnEnemies(state, 500) で初期 3 体 + 通常 1 体（合計 4 体）', () => {
-    // 注: 仕様メモでは「初期 1 + 通常 1」だが、INITIAL_GROUND_SPAWN_INTERVAL_MS=200
-    //     なので 500ms の単一呼び出しで while ループにより初期 3 体すべて出る。
-    //     spawnIntervalMs=500 で crossings=1 → 通常 1 体。合計 4 体が実際の挙動。
+  it('createInitialGameState + spawnEnemies(state, 500) で初期 1 体 + 通常 1 体（合計 2 体）', () => {
+    // S4: 初期 3 体は「毎フレーム最大 1 体」仕様（legacy delayedCall 準拠）。
+    // 単一フレーム deltaMS=500 では初期 1 体のみ。
+    // spawnIntervalMs=500 で crossings=1 → 通常 1 体。合計 2 体。
     const state = createInitialGameState()
     state.phase = 'playing'
     const result = spawnEnemies(state, 500)
-    expect(state.initialEnemiesSpawned).toBe(true)
-    expect(state.initialEnemiesRemaining).toBe(0)
-    // 4 体（初期 ground 3 + 通常 1）
-    expect(result).toHaveLength(4)
+    // まだ初期 3 体は出し切れていない
+    expect(state.initialEnemiesSpawned).toBe(false)
+    expect(state.initialEnemiesRemaining).toBe(2)
+    expect(result).toHaveLength(2)
     const grounds = result.filter((e) => e.type === 'ground')
-    // 通常スポーンも ground が選ばれる可能性があるため >=3
-    expect(grounds.length).toBeGreaterThanOrEqual(3)
+    // 初期 ground が必ず 1 体、通常が ground を引いた場合は 2 体
+    expect(grounds.length).toBeGreaterThanOrEqual(1)
   })
 
-  it('createInitialGameState + spawnEnemies(state, 1000) で初期 3 体 + 通常 2 体（合計 5 体）', () => {
+  it('createInitialGameState + spawnEnemies(state, 1000) で初期 1 体 + 通常 2 体（合計 3 体）', () => {
+    // S4: 初期 3 体は毎フレーム 1 体なので、単一呼び出しでは 1 体だけ。
+    // spawnIntervalMs=500、deltaMS=1000 で crossings=2 → 通常 2 体。合計 3 体。
     const state = createInitialGameState()
     state.phase = 'playing'
     const result = spawnEnemies(state, 1000)
-    // 初期 3 体 + 通常 2 体
-    expect(result).toHaveLength(5)
-    expect(state.initialEnemiesSpawned).toBe(true)
+    expect(result).toHaveLength(3)
+    // 初期 1 体しか出ていないので未完了
+    expect(state.initialEnemiesSpawned).toBe(false)
+    expect(state.initialEnemiesRemaining).toBe(2)
   })
 })
 
