@@ -25,7 +25,10 @@ function makeState(enemies: EnemyState[]): GameState {
 describe('applyBombDamage', () => {
   it('proton: ビーム上（水平方向 |y|<=20）の敵に 1 ダメージ', () => {
     // #38: proton は線分判定。x=0,y=0 のビームは |y|<=20 が当たる
-    const state = makeState([makeEnemy('a', 3, 0, 0), makeEnemy('b', 5, 100, 0)])
+    const state = makeState([
+      makeEnemy('a', 3, 0, 0),
+      makeEnemy('b', 5, 100, 0),
+    ])
     const result = applyBombDamage(state, 'proton')
     expect(result.hitResults.get('a')).toBe(2)
     expect(result.hitResults.get('b')).toBe(4)
