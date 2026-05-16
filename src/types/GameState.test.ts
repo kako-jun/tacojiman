@@ -3,11 +3,22 @@ import {
   createInitialGameState,
   getClockText,
   isHouseTapped,
+  pickDecoyTarget,
   pickRandomBomb,
+  pickSentryTarget,
+  tickMultiHitBomb,
+  triggerMineIfHit,
   tryBombRecovery,
   TILE_SIZE,
 } from './GameState'
-import type { BombType } from './GameState'
+import type {
+  BombType,
+  DecoyState,
+  EnemyState,
+  MineState,
+  MultiHitBombState,
+  SentryState,
+} from './GameState'
 
 describe('createInitialGameState', () => {
   it('returns a serializable PixiJS-independent state object', () => {
@@ -122,5 +133,132 @@ describe('isHouseTapped', () => {
   it('明らかに離れた地点は false', () => {
     expect(isHouseTapped(100, 100)).toBe(false)
     expect(isHouseTapped(-100, -100)).toBe(false)
+  })
+})
+
+// ─── #38 仕掛け系ボムのピュア関数 ──────────────────────────────
+
+function makeEnemyAt(x: number, y: number): EnemyState {
+  return {
+    id: 'e1',
+    type: 'ground',
+    hp: 2,
+    speed: 1,
+    x,
+    y,
+    routeProgress: 0,
+    route: [],
+  }
+}
+
+describe('triggerMineIfHit (#38)', () => {
+  const mine: MineState = {
+    id: 'm1',
+    x: 0,
+    y: 0,
+    triggerRange: 30,
+    explosionRange: 60,
+    damage: 1,
+  }
+
+  it('triggerRange 内の敵は true', () => {
+    expect(triggerMineIfHit(mine, makeEnemyAt(20, 0))).toBe(true)
+  })
+
+  it('triggerRange ちょうどなら true', () => {
+    expect(triggerMineIfHit(mine, makeEnemyAt(30, 0))).toBe(true)
+  })
+
+  it('triggerRange を超えると false', () => {
+    expect(triggerMineIfHit(mine, makeEnemyAt(31, 0))).toBe(false)
+  })
+})
+
+describe('pickSentryTarget (#38)', () => {
+  const sentry: SentryState = {
+    id: 's1',
+    x: 0,
+    y: 0,
+    remainingMs: 5_000,
+    fireCooldownMs: 0,
+    range: 100,
+    damage: 1,
+  }
+
+  it('射程内が無ければ null', () => {
+    expect(pickSentryTarget(sentry, [makeEnemyAt(200, 0)])).toBeNull()
+  })
+
+  it('射程内の最近敵を返す', () => {
+    const a = { ...makeEnemyAt(50, 0), id: 'a' }
+    const b = { ...makeEnemyAt(80, 0), id: 'b' }
+    expect(pickSentryTarget(sentry, [b, a])?.id).toBe('a')
+  })
+
+  it('敵が空なら null', () => {
+    expect(pickSentryTarget(sentry, [])).toBeNull()
+  })
+})
+
+describe('pickDecoyTarget (#38)', () => {
+  const decoy: DecoyState = {
+    id: 'd1',
+    x: 0,
+    y: 0,
+    remainingMs: 5_000,
+    lureRange: 120,
+  }
+
+  it('lureRange 内なら true', () => {
+    expect(pickDecoyTarget(decoy, makeEnemyAt(100, 0))).toBe(true)
+  })
+
+  it('lureRange 外なら false', () => {
+    expect(pickDecoyTarget(decoy, makeEnemyAt(200, 0))).toBe(false)
+  })
+})
+
+describe('tickMultiHitBomb (#38)', () => {
+  function makeBomb(remainingHits: number, nextIn = 200): MultiHitBombState {
+    return {
+      id: 'mh1',
+      x: 0,
+      y: 0,
+      range: 80,
+      damage: 1,
+      remainingHits,
+      nextHitInMs: nextIn,
+      hitIntervalMs: 200,
+    }
+  }
+
+  it('nextHitInMs が残っていれば fired=false で減算', () => {
+    const r = tickMultiHitBomb(makeBomb(3, 200), 50)
+    expect(r.fired).toBe(false)
+    expect(r.remaining?.nextHitInMs).toBe(150)
+    expect(r.remaining?.remainingHits).toBe(3)
+  })
+
+  it('nextHitInMs <= 0 で fired=true、残りヒットあれば再充填', () => {
+    const r = tickMultiHitBomb(makeBomb(3, 100), 100)
+    expect(r.fired).toBe(true)
+    expect(r.remaining?.remainingHits).toBe(2)
+    expect(r.remaining?.nextHitInMs).toBe(200)
+  })
+
+  it('最後の 1 ヒットを撃つと remaining=null', () => {
+    const r = tickMultiHitBomb(makeBomb(1, 0), 50)
+    expect(r.fired).toBe(true)
+    expect(r.remaining).toBeNull()
+  })
+})
+
+describe('createInitialGameState — #38 仕掛け系配列が初期化', () => {
+  it('mines / sentries / decoys / multiHitBombs は空配列', () => {
+    const state = createInitialGameState()
+    expect(state.mines).toEqual([])
+    expect(state.sentries).toEqual([])
+    expect(state.decoys).toEqual([])
+    expect(state.multiHitBombs).toEqual([])
   })
 })
