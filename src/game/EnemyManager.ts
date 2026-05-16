@@ -194,12 +194,29 @@ function makeAirEnemy(ctx: SpawnContext, rand: () => number = Math.random): Enem
 }
 
 /**
- * 地下タコのスポーン位置（rice_field タイルからランダム）を返す。
+ * 地下タコのスポーン位置（家からマンハッタン 3 タイル以内の rice_field）を返す。
+ * 「家のすぐ近くから湧く」設計（CLAUDE.md 仕様）。
+ * 3 タイル以内の候補がない場合は rice_field 全体からフォールバックでランダム選択する。
  */
-function makeUndergroundEnemy(ctx: SpawnContext): EnemyState | null {
-  const startPanels = ctx.map.flat().filter((p) => p.type === 'rice_field')
-  if (startPanels.length === 0) return null
-  const panel = startPanels[Math.floor(Math.random() * startPanels.length)]
+const UNDERGROUND_HOUSE_RADIUS = 3
+
+function makeUndergroundEnemy(
+  ctx: SpawnContext,
+  rand: () => number = Math.random
+): EnemyState | null {
+  const allRiceFields = ctx.map.flat().filter((p) => p.type === 'rice_field')
+  if (allRiceFields.length === 0) return null
+
+  let candidates = allRiceFields
+  if (ctx.goalPanel) {
+    const goal = ctx.goalPanel
+    const near = allRiceFields.filter(
+      (p) => Math.abs(p.x - goal.x) + Math.abs(p.y - goal.y) <= UNDERGROUND_HOUSE_RADIUS
+    )
+    if (near.length > 0) candidates = near
+  }
+
+  const panel = candidates[Math.floor(rand() * candidates.length)]
   const { x, y } = panelToPixel(panel, ctx)
   return makeEnemy('underground', x, y)
 }
