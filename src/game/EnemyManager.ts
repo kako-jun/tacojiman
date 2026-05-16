@@ -226,7 +226,12 @@ export function spawnEnemies(state: GameState, deltaMS: number): EnemyState[] {
     state.initialEnemiesNextDelayMs -= deltaMS
     while (state.initialEnemiesRemaining > 0 && state.initialEnemiesNextDelayMs <= 0) {
       const enemy = makeGroundEnemy(ctx)
-      if (enemy !== null) result.push(enemy)
+      if (enemy === null) {
+        // path タイル等が無いマップでは消費せず次フレームで再試行する
+        // （無限ループ防止のためここで break する）
+        break
+      }
+      result.push(enemy)
       state.initialEnemiesRemaining -= 1
       if (state.initialEnemiesRemaining > 0) {
         state.initialEnemiesNextDelayMs += INITIAL_GROUND_SPAWN_INTERVAL_MS
