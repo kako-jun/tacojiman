@@ -228,7 +228,10 @@ export class GameScene extends Container {
               { x: startX, y: startY },
               waterGoal
             )
-            // 末尾に player_house パネルを追加して家に到達させる
+            // Q2: 水路の終端から家へ突入する視覚演出のため、敢えて water/river
+            //     ネットワーク外の player_house を route 末尾に接続している。
+            //     A* は water/river ネットワーク内のみで動くので、最後の 1 セグメントは
+            //     ネットワーク外の player_house へ直線補間で「上陸する」イメージ。
             e.route =
               route.length > 0
                 ? [...route, { x: goalPanel.x, y: goalPanel.y }]
