@@ -4,7 +4,12 @@ import type {
   GameState,
   MapPanel,
 } from '../types/GameState'
-import { TILE_SIZE } from '../types/GameState'
+import {
+  computeTakokongDamage,
+  createTakokongState,
+  TAKOKONG_DEFEAT_BONUS,
+  TILE_SIZE,
+} from '../types/GameState'
 import { findPathEdgePosition, findWaterGoalPanel, findWaterPath } from './map'
 
 // 蜂忍術通常攻撃の固定パラメータ
@@ -380,6 +385,8 @@ export function spawnEnemies(
   if (!state.takokongSpawned && state.elapsedMs + deltaMS >= 170_000) {
     result.push(makeEnemy('takokong', 0, ctx.offsetY - 200))
     state.takokongSpawned = true
+    // #37: 専用ステートを初期化する。バリアは出現直後から数秒間有効。
+    state.takokongState = createTakokongState(state.elapsedMs + deltaMS)
   }
 
   state.spawnTimer = nextTimer
@@ -434,6 +441,30 @@ export function checkAttackHit(
     const panelY = Math.floor((enemy.y - offsetY) / TILE_SIZE)
     const panel = map[panelX]?.[panelY]
     if (panel && (panel.type === 'other_house' || panel.type === 'station')) {
+      continue
+    }
+
+    // #37: takokong は専用ステートでダメージ管理する（バリア軽減・撃破ボーナス）
+    if (enemy.type === 'takokong' && state.takokongState !== null) {
+      const tk = state.takokongState
+      const actualDamage = computeTakokongDamage(tk.barrierActive, damage)
+      if (actualDamage <= 0) {
+        damaged.push(enemy.id)
+        continue
+      }
+      tk.hp = Math.max(0, tk.hp - actualDamage)
+      enemy.hp = tk.hp
+      if (tk.hp <= 0) {
+        tk.defeated = true
+        tk.active = false
+        const score =
+          ENEMY_SPECS.takokong.score * zoomMultiplier + TAKOKONG_DEFEAT_BONUS
+        earned += score
+        defeated.push(enemy.id)
+        state.enemies.splice(i, 1)
+      } else {
+        damaged.push(enemy.id)
+      }
       continue
     }
 

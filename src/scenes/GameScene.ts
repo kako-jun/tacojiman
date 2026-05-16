@@ -11,7 +11,10 @@ import { COLORS, PANEL_COLORS } from '../constants/colors'
 import {
   getClockText,
   isHouseTapped,
+  isTakokongActive,
   pickRandomBomb,
+  tickTakokongBarrier,
+  tickTakokongCountdown,
   tryBombRecovery,
   TILE_SIZE,
   VIEW_HEIGHT,
@@ -59,7 +62,6 @@ export class GameScene extends Container {
   private readonly enemyGraphics = new Graphics()
   private readonly playerGraphics = new Graphics()
   private keyboard: KeyboardManager | null = null
-  private takokongDefeated = false
   private takokongBgmStarted = false
   private readonly events = new GameEventEmitter()
   private effectManager: EffectManager | null = null
@@ -108,6 +110,19 @@ export class GameScene extends Container {
   })
   private readonly minimapGraphics = new Graphics()
   private readonly minimapMarker = new Graphics()
+  // タココング戦 UI（#37）
+  private readonly takokongHpBar = new Graphics()
+  private readonly takokongCountdownText = new Text({
+    text: '',
+    style: {
+      fill: 0xff4444,
+      fontFamily: 'monospace',
+      fontSize: 96,
+      fontWeight: '900',
+      stroke: { color: 0x000000, width: 8 },
+    },
+  })
+  private takokongCleanupDone = false
   // ポインター入力状態
   private pointerDownAtMs: number | null = null
   private pointerDownPos: { x: number; y: number } | null = null
@@ -142,6 +157,14 @@ export class GameScene extends Container {
     this.minimapGraphics.y = VIEW_HEIGHT - 80 - 14
     this.minimapMarker.x = VIEW_WIDTH - 80 - 14
     this.minimapMarker.y = VIEW_HEIGHT - 80 - 14
+    // タココング HP バー（画面上部、時計の下）
+    this.takokongHpBar.x = 0
+    this.takokongHpBar.y = 0
+    // カウントダウン Text（画面中央、anchor 中央）
+    this.takokongCountdownText.anchor.set(0.5)
+    this.takokongCountdownText.x = VIEW_WIDTH / 2
+    this.takokongCountdownText.y = VIEW_HEIGHT / 2
+    this.takokongCountdownText.visible = false
     this.uiLayer.addChild(
       this.clockText,
       this.scoreText,
@@ -149,7 +172,9 @@ export class GameScene extends Container {
       this.bombText,
       this.bombStockText,
       this.minimapGraphics,
-      this.minimapMarker
+      this.minimapMarker,
+      this.takokongHpBar,
+      this.takokongCountdownText
     )
 
     // ポインター入力: scene root 全体をヒット領域にする
@@ -164,11 +189,14 @@ export class GameScene extends Container {
   initWithState(state: GameState): void {
     this.state = structuredClone(state)
     this.takokongBgmStarted = false
+    this.takokongCleanupDone = false
     this.state.phase = 'playing'
     this.pointerDownAtMs = null
     this.pointerDownPos = null
     this.isLongPressing = false
     this.nowMs = 0
+    this.takokongHpBar.clear()
+    this.takokongCountdownText.visible = false
 
     // window blur で強制ズームアウト（フォーカス喪失時）
     if (this.blurHandler === null) {
@@ -256,11 +284,13 @@ export class GameScene extends Container {
     }
 
     // ── 長押し検出: pointerdown 後 300ms 経過でズーム開始 ──
+    // #37: タココング戦中はズーム不可（全体俯瞰スケール固定）
     if (
       this.pointerDownAtMs !== null &&
       this.pointerDownPos !== null &&
       !this.isLongPressing &&
-      this.nowMs - this.pointerDownAtMs >= LONG_PRESS_THRESHOLD_MS
+      this.nowMs - this.pointerDownAtMs >= LONG_PRESS_THRESHOLD_MS &&
+      !isTakokongActive(this.state)
     ) {
       this.isLongPressing = true
       const world = screenToWorld(
@@ -331,10 +361,25 @@ export class GameScene extends Container {
       this.state.enemies.push(e)
     }
 
-    // 新しくスポーンした敵の中に takokong があればズームイン
+    // #37: 新しくスポーンした敵に takokong があれば「登場演出」を起こす。
+    // - ズームインはしない（戦闘中は全体俯瞰スケール固定）
+    // - 画面シェイク（強）+ フラッシュ + BGM 開始
     for (const e of newEnemies) {
       if (e.type === 'takokong') {
-        this.state.camera = startZoomIn(this.state.camera, e.x, e.y, 1.5, 1000)
+        this.state.shakeState = { remainingMs: 1000, intensity: 10 }
+        // 強制的にズームアウト（直前まで長押しズーム中だった場合のリセット）
+        this.state.camera = zoomOut(this.state.camera, 200)
+        this.isLongPressing = false
+        // 登場フラッシュ
+        const flash = new Graphics()
+        this.uiLayer.addChild(flash)
+        flash.rect(0, 0, VIEW_WIDTH, VIEW_HEIGHT)
+        flash.fill({ color: 0xffffff, alpha: 0.8 })
+        gsap.to(flash, {
+          alpha: 0,
+          duration: 0.5,
+          onComplete: () => flash.destroy(),
+        })
       }
     }
 
@@ -348,6 +393,13 @@ export class GameScene extends Container {
     this.mapLayer.x = VIEW_WIDTH / 2 + dx
     this.mapLayer.y = VIEW_HEIGHT / 2 + dy
 
+    // #37: タココング戦中はズーム強制 1.0 固定（俯瞰）
+    if (isTakokongActive(state)) {
+      state.camera.scale = 1
+      state.camera.pivot = { x: 0, y: 0 }
+      state.camera.zoom = null
+    }
+
     // ズーム適用（新 camera.zoom 経路）
     state.camera = updateZoom(state.camera, ticker.deltaMS)
     this.mapLayer.scale.set(state.camera.scale)
@@ -355,18 +407,39 @@ export class GameScene extends Container {
 
     this.advanceEnemies(ticker.deltaMS)
 
+    // #37: バリアタイマー更新
+    if (state.takokongState !== null && state.takokongState.active) {
+      state.takokongState = tickTakokongBarrier(
+        state.takokongState,
+        state.elapsedMs
+      )
+    }
+
     // takokong が消えたらズームリセット
-    if (state.takokongSpawned && !this.takokongDefeated) {
-      if (!state.enemies.some((e) => e.type === 'takokong')) {
-        // takokong が消えた（撃破または到達）
-        this.takokongDefeated = true
+    if (state.takokongSpawned && !this.takokongCleanupDone) {
+      const stillAlive = state.enemies.some((e) => e.type === 'takokong')
+      if (!stillAlive) {
+        // takokong が消えた（撃破 or 家到達）
+        this.takokongCleanupDone = true
+        // #37: takokongState を撃破/到達確定状態にする
+        if (state.takokongState !== null) {
+          state.takokongState = {
+            ...state.takokongState,
+            active: false,
+          }
+        }
+        // ズーム解除（戦闘中は固定だったので、scale=1 のまま）
         state.camera = zoomOut(state.camera, 0)
-        // 即座に scale=1, pivot=(0,0) を反映（duration=0 で updateZoom は次フレームに 1 を返す）
         state.camera.scale = 1
         state.camera.pivot = { x: 0, y: 0 }
         state.camera.zoom = null
         this.mapLayer.scale.set(1)
         this.mapLayer.pivot.set(0, 0)
+        // BGM 停止
+        this.sound?.stopTakokongBgm()
+        // UI 隠す
+        this.takokongHpBar.clear()
+        this.takokongCountdownText.visible = false
       }
     }
 
@@ -375,6 +448,9 @@ export class GameScene extends Container {
       this.takokongBgmStarted = true
       this.sound?.playTakokongBgm()
     }
+
+    // #37: タココング戦 UI（HP バー + カウントダウン）の更新
+    this.updateTakokongUi()
 
     this.drawEnemies()
     this.drawUi()
@@ -646,6 +722,58 @@ export class GameScene extends Container {
     const my = state.player.panelY * cellH + cellH / 2
     this.minimapMarker.circle(mx, my, 2)
     this.minimapMarker.fill(0xffffff)
+  }
+
+  /**
+   * #37: タココング戦 UI（HP バー + 残時間カウントダウン）を毎フレーム更新する。
+   * - HP バー: 画面上部に横長 (画面幅 - 28) × 高 16、active のときだけ表示
+   * - カウントダウン: 残り 10s 以降、画面中央に大きな数字
+   * - バリア中はバリア表示マーカー（紫リング）
+   */
+  private updateTakokongUi(): void {
+    const state = this.requireState()
+    const tk = state.takokongState
+    this.takokongHpBar.clear()
+
+    // カウントダウン: 残り 10s 以降は常に表示（タココング登場と独立）
+    const countdownSec = tickTakokongCountdown(
+      state.elapsedMs,
+      state.durationMs
+    )
+    if (countdownSec !== null && countdownSec > 0) {
+      this.takokongCountdownText.text = `${countdownSec}`
+      this.takokongCountdownText.visible = true
+    } else {
+      this.takokongCountdownText.visible = false
+    }
+
+    if (tk === null || !tk.active) {
+      return
+    }
+
+    // HP バー（画面上部、時計の下）
+    const barX = 14
+    const barY = 70
+    const barW = VIEW_WIDTH - 28
+    const barH = 18
+    // 背景
+    this.takokongHpBar.rect(barX - 2, barY - 2, barW + 4, barH + 4)
+    this.takokongHpBar.fill(0x000000)
+    this.takokongHpBar.rect(barX, barY, barW, barH)
+    this.takokongHpBar.fill(0x333333)
+    // HP
+    const ratio = Math.max(0, tk.hp / tk.maxHp)
+    this.takokongHpBar.rect(barX, barY, barW * ratio, barH)
+    this.takokongHpBar.fill(0xff2244)
+    // 縁
+    this.takokongHpBar.rect(barX, barY, barW, barH)
+    this.takokongHpBar.stroke({ color: 0xffffff, width: 2 })
+    // バリア中マーカー（紫リング、HP バー左端）
+    if (tk.barrierActive) {
+      this.takokongHpBar.circle(barX + 8, barY + barH / 2, 6)
+      this.takokongHpBar.fill(0x9900cc)
+      this.takokongHpBar.stroke({ color: 0xffffff, width: 1 })
+    }
   }
 
   private initMinimap(): void {
@@ -925,7 +1053,8 @@ export class GameScene extends Container {
     // ダメージ計算（muddy/sentry/bunshin はダメージなし）
     const result = applyBombDamage(state, type)
     // スコア加算と score-gain イベント emit
-    const earnedScore = result.hitResults.size
+    // #37: takokongBonus（撃破時 +100）も加算する
+    const earnedScore = result.hitResults.size + result.takokongBonus
     if (earnedScore > 0) {
       state.score += earnedScore
       this.events.emit('score-gain', {

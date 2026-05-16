@@ -1,16 +1,22 @@
 import type { BombType, GameState } from '../types/GameState'
+import {
+  computeTakokongDamage,
+  TAKOKONG_DEFEAT_BONUS,
+} from '../types/GameState'
 
 export interface BombEffect {
   type: BombType
   // ダメージを受けた敵のIDと新HPのマップ
   hitResults: Map<string, number>
+  // タココング撃破時に加算するボーナススコア（撃破していなければ 0）
+  takokongBonus: number
 }
 
 // 各ボムの当たり判定を計算し、state.enemies の HP 更新と除去を行う
 // BombEffect（hitResults）を返す。エフェクト描画は GameScene 側で行う
 
 export function applyBombDamage(state: GameState, type: BombType): BombEffect {
-  const result: BombEffect = { type, hitResults: new Map() }
+  const result: BombEffect = { type, hitResults: new Map(), takokongBonus: 0 }
   // 各ボムのダメージ範囲でヒット判定
   switch (type) {
     case 'proton':
@@ -33,9 +39,22 @@ export function applyBombDamage(state: GameState, type: BombType): BombEffect {
       break
   }
   // hitResults に基づいて state.enemies の HP を更新
+  // #37: takokong は専用ステートでバリア軽減し、撃破時はボーナス +100
   for (const enemy of state.enemies) {
     const newHp = result.hitResults.get(enemy.id)
-    if (newHp !== undefined) {
+    if (newHp === undefined) continue
+    if (enemy.type === 'takokong' && state.takokongState !== null) {
+      const tk = state.takokongState
+      const damage = enemy.hp - newHp
+      const actualDamage = computeTakokongDamage(tk.barrierActive, damage)
+      tk.hp = Math.max(0, tk.hp - actualDamage)
+      enemy.hp = tk.hp
+      if (tk.hp <= 0 && !tk.defeated) {
+        tk.defeated = true
+        tk.active = false
+        result.takokongBonus += TAKOKONG_DEFEAT_BONUS
+      }
+    } else {
       enemy.hp = newHp
     }
   }

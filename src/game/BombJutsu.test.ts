@@ -130,3 +130,60 @@ describe('applyBombDamage', () => {
     expect(result.hitResults.has('just-outside')).toBe(false)
   })
 })
+
+// ─── #37 タココング戦への bomb 適用 ───────────────────────────────
+
+describe('applyBombDamage — #37 takokong バリア軽減 + ボーナス', () => {
+  function makeTakokongState(hp: number, barrierActive: boolean): GameState {
+    const state = createInitialGameState()
+    state.enemies = [
+      {
+        id: 'takokong-1',
+        type: 'takokong',
+        hp,
+        speed: 0.8,
+        x: 0,
+        y: 0,
+        routeProgress: 0,
+        route: [],
+      },
+    ]
+    state.takokongState = {
+      active: true,
+      hp,
+      maxHp: 42,
+      barrierActive,
+      barrierUntilMs: barrierActive ? 999_999 : 0,
+      defeated: false,
+    }
+    return state
+  }
+
+  it('proton（damage=1）バリア中はタココング HP が減らない', () => {
+    const state = makeTakokongState(42, true)
+    applyBombDamage(state, 'proton')
+    expect(state.takokongState!.hp).toBe(42)
+    expect(state.enemies[0].hp).toBe(42)
+  })
+
+  it('jakuhou（damage=2）バリア中は damage=1 相当（HP は 1 減る）', () => {
+    const state = makeTakokongState(42, true)
+    applyBombDamage(state, 'jakuhou')
+    expect(state.takokongState!.hp).toBe(41)
+  })
+
+  it('proton で HP=1 を撃破するとボーナス +100 が takokongBonus に返る', () => {
+    const state = makeTakokongState(1, false)
+    const result = applyBombDamage(state, 'proton')
+    expect(state.takokongState!.defeated).toBe(true)
+    expect(state.takokongState!.active).toBe(false)
+    expect(result.takokongBonus).toBe(100)
+    expect(state.enemies).toHaveLength(0)
+  })
+
+  it('撃破されないボムでは takokongBonus=0', () => {
+    const state = makeTakokongState(42, false)
+    const result = applyBombDamage(state, 'proton')
+    expect(result.takokongBonus).toBe(0)
+  })
+})
