@@ -12,7 +12,7 @@ import {
   type GameState,
   type MapPanel,
 } from '../types/GameState'
-import { findPath } from '../game/map'
+import { findPath, findWaterGoalPanel, findWaterPath } from '../game/map'
 import { KeyboardManager } from '../game/KeyboardManager'
 import { spawnEnemies } from '../game/EnemyManager'
 import { applyBombDamage } from '../game/BombJutsu'
@@ -208,13 +208,37 @@ export class GameScene extends Container {
       if (goalPanel) {
         const startX = Math.round((e.x - offsetX) / TILE_SIZE)
         const startY = Math.round((e.y - offsetY) / TILE_SIZE)
-        const route = findPath(
-          map,
-          { x: startX, y: startY },
-          { x: goalPanel.x, y: goalPanel.y }
-        )
-        e.route =
-          route.length > 0 ? route : [{ x: goalPanel.x, y: goalPanel.y }]
+        if (e.type === 'ground') {
+          const route = findPath(
+            map,
+            { x: startX, y: startY },
+            { x: goalPanel.x, y: goalPanel.y }
+          )
+          e.route =
+            route.length > 0 ? route : [{ x: goalPanel.x, y: goalPanel.y }]
+        } else if (e.type === 'water') {
+          // 水タコは water/river ネットワークを A* で辿る
+          const waterGoal = findWaterGoalPanel(map, {
+            x: goalPanel.x,
+            y: goalPanel.y,
+          })
+          if (waterGoal !== null) {
+            const route = findWaterPath(
+              map,
+              { x: startX, y: startY },
+              waterGoal
+            )
+            // 末尾に player_house パネルを追加して家に到達させる
+            e.route =
+              route.length > 0
+                ? [...route, { x: goalPanel.x, y: goalPanel.y }]
+                : [{ x: goalPanel.x, y: goalPanel.y }]
+          } else {
+            e.route = [{ x: goalPanel.x, y: goalPanel.y }]
+          }
+        }
+        // air / underground / takokong は route=[] のまま
+        // advanceEnemies の else 分岐で直線移動する
       }
       this.state.enemies.push(e)
     }
@@ -608,6 +632,19 @@ export class GameScene extends Container {
           const dist = Math.sqrt(dx * dx + dy * dy)
           if (dist <= 1) {
             // player_house 到達 → 除去
+            state.enemies.splice(i, 1)
+          } else {
+            const norm = (enemy.speed * deltaMS * 0.05) / dist
+            enemy.x += dx * norm
+            enemy.y += dy * norm
+          }
+        }
+        // underground: rice_field から直線で家へ
+        else if (enemy.type === 'underground') {
+          const dx = 0 - enemy.x
+          const dy = 0 - enemy.y
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          if (dist <= 1) {
             state.enemies.splice(i, 1)
           } else {
             const norm = (enemy.speed * deltaMS * 0.05) / dist
