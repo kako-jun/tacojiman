@@ -82,6 +82,16 @@ export interface GameState {
   shakeState: ShakeState
   zoomState: ZoomState | null
   playerHp: number
+  // 初期 3 体スポーン管理
+  initialEnemiesSpawned: boolean
+  initialEnemiesRemaining: number
+  initialEnemiesNextDelayMs: number
+  // 動的スポーン間隔
+  spawnIntervalMs: number
+  spawnRateUpgradeAccumMs: number
+  // 動的最大敵数
+  maxEnemies: number
+  maxEnemiesUpgradeAccumMs: number
 }
 
 export const VIEW_WIDTH = 400
@@ -113,6 +123,13 @@ export function createInitialGameState(): GameState {
       isMoving: false,
     },
     playerHp: 3,
+    initialEnemiesSpawned: false,
+    initialEnemiesRemaining: 3,
+    initialEnemiesNextDelayMs: 0,
+    spawnIntervalMs: 500,
+    spawnRateUpgradeAccumMs: 0,
+    maxEnemies: 40,
+    maxEnemiesUpgradeAccumMs: 0,
   }
 }
 
