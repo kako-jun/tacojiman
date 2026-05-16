@@ -187,8 +187,8 @@ function makeWaterEnemy(
 function makeAirEnemy(ctx: SpawnContext, rand: () => number = Math.random): EnemyState {
   const margin = 200
   const edge = Math.floor(rand() * 4)
-  let x = 0
-  let y = 0
+  let x: number
+  let y: number
   switch (edge) {
     case 0:
       // 上辺
