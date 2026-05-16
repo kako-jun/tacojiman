@@ -11,6 +11,16 @@ import {
   TILE_SIZE,
 } from '../types/GameState'
 import { findPathEdgePosition, findWaterGoalPanel, findWaterPath } from './map'
+import {
+  ENEMY_SPAWN_WEIGHTS,
+  INITIAL_GROUND_SPAWN_INTERVAL_MS,
+  MAX_ENEMIES_CAP,
+  MAX_ENEMIES_INCREMENT,
+  MAX_ENEMIES_UPGRADE_INTERVAL_MS,
+  SPAWN_INTERVAL_MIN_MS,
+  SPAWN_RATE_DECAY,
+  SPAWN_RATE_UPGRADE_INTERVAL_MS,
+} from './domain/GameRules'
 
 // 蜂忍術通常攻撃の固定パラメータ
 export const ATTACK_RANGE = 80
@@ -31,27 +41,16 @@ export const ENEMY_SPECS: Record<EnemyType, EnemySpec> = {
   takokong: { type: 'takokong', speed: 0.8, baseHp: 42, score: 10 },
 }
 
-// 重み付き選択（旧Phaser版準拠）
+// 重み付き選択（旧Phaser版準拠）— ENEMY_SPAWN_WEIGHTS を順序固定で展開する
 const ENEMY_WEIGHTS: Array<{
   type: Exclude<EnemyType, 'takokong'>
   weight: number
 }> = [
-  { type: 'ground', weight: 0.5 },
-  { type: 'water', weight: 0.25 },
-  { type: 'air', weight: 0.15 },
-  { type: 'underground', weight: 0.1 },
+  { type: 'ground', weight: ENEMY_SPAWN_WEIGHTS.ground },
+  { type: 'water', weight: ENEMY_SPAWN_WEIGHTS.water },
+  { type: 'air', weight: ENEMY_SPAWN_WEIGHTS.air },
+  { type: 'underground', weight: ENEMY_SPAWN_WEIGHTS.underground },
 ]
-
-// 動的調整パラメータ
-const SPAWN_RATE_UPGRADE_INTERVAL_MS = 15_000
-const SPAWN_RATE_DECAY = 0.8
-const SPAWN_INTERVAL_MIN_MS = 200
-const MAX_ENEMIES_UPGRADE_INTERVAL_MS = 15_000
-const MAX_ENEMIES_INCREMENT = 5
-const MAX_ENEMIES_CAP = 70
-
-// 初期 3 体地上タコの間隔（200ms）
-const INITIAL_GROUND_SPAWN_INTERVAL_MS = 200
 
 function makeId(type: EnemyType): string {
   return `${type}-${globalThis.crypto.randomUUID()}`

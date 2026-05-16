@@ -1,4 +1,4 @@
-import { Container, Graphics, Rectangle, Text } from 'pixi.js'
+import { Container, Graphics, Rectangle, Sprite, Texture, Text } from 'pixi.js'
 import { VIEW_HEIGHT, VIEW_WIDTH } from '../types/GameState'
 import { rankingClient } from '../game/RankingClient'
 import {
@@ -8,6 +8,7 @@ import {
   saveHighScoreIfNew,
   type TacojimanHighScore,
 } from '../game/storage'
+import { calculateEndingLevel } from '../game/domain/ScoreCalculator'
 
 interface EndingInfo {
   level: number
@@ -16,51 +17,43 @@ interface EndingInfo {
   dialogue: string
 }
 
-const SCORE_THRESHOLDS = {
-  trueEnd: 8001,
-  special: 5001,
-  good: 3001,
-  normal: 1001,
-} as const
-
 function getEndingInfo(score: number): EndingInfo {
-  if (score >= SCORE_THRESHOLDS.trueEnd) {
-    return {
-      level: 5,
-      bgColor: 0xffd700,
-      title: '真エンディング',
-      dialogue: '「ありがとう...今度は私が守るから」',
-    }
-  }
-  if (score >= SCORE_THRESHOLDS.special) {
-    return {
-      level: 4,
-      bgColor: 0xff69b4,
-      title: 'スペシャルエンド',
-      dialogue: '「本当は...好きだったの」',
-    }
-  }
-  if (score >= SCORE_THRESHOLDS.good) {
-    return {
-      level: 3,
-      bgColor: 0x87ceeb,
-      title: 'グッドエンド',
-      dialogue: '「心配してくれてたのね...」',
-    }
-  }
-  if (score >= SCORE_THRESHOLDS.normal) {
-    return {
-      level: 2,
-      bgColor: 0xdda0dd,
-      title: 'ノーマルエンド',
-      dialogue: '「今日は大事な日だったのに...」',
-    }
-  }
-  return {
-    level: 1,
-    bgColor: 0x696969,
-    title: 'バッドエンド',
-    dialogue: '「...」',
+  switch (calculateEndingLevel(score)) {
+    case 'true':
+      return {
+        level: 5,
+        bgColor: 0xffd700,
+        title: '真エンディング',
+        dialogue: '「ありがとう...今度は私が守るから」',
+      }
+    case 'special':
+      return {
+        level: 4,
+        bgColor: 0xff69b4,
+        title: 'スペシャルエンド',
+        dialogue: '「本当は...好きだったの」',
+      }
+    case 'good':
+      return {
+        level: 3,
+        bgColor: 0x87ceeb,
+        title: 'グッドエンド',
+        dialogue: '「心配してくれてたのね...」',
+      }
+    case 'normal':
+      return {
+        level: 2,
+        bgColor: 0xdda0dd,
+        title: 'ノーマルエンド',
+        dialogue: '「今日は大事な日だったのに...」',
+      }
+    default:
+      return {
+        level: 1,
+        bgColor: 0x696969,
+        title: 'バッドエンド',
+        dialogue: '「...」',
+      }
   }
 }
 

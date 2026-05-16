@@ -4,6 +4,10 @@ import type {
   ShakeState,
   ZoomState,
 } from '../game/CameraController'
+import {
+  calculateGameTime,
+  formatGameTime,
+} from '../game/domain/TimeManager'
 
 export type PanelType =
   | 'water'
@@ -469,9 +473,10 @@ export function isHouseTapped(
 }
 
 export function getClockText(state: GameState): string {
-  const gameMinutes = Math.floor((state.elapsedMs / state.durationMs) * 30)
-  const totalMinutes = state.morningStartMinutes + gameMinutes
-  const hour = Math.floor(totalMinutes / 60)
-  const minute = totalMinutes % 60
-  return `${hour}:${minute.toString().padStart(2, '0')} AM`
+  const t = calculateGameTime(
+    state.elapsedMs,
+    state.durationMs,
+    state.morningStartMinutes
+  )
+  return formatGameTime(t)
 }
