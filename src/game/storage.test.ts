@@ -24,7 +24,8 @@ function installLocalStorageMock(): { restore: () => void } {
       return store.size
     },
     clear: () => store.clear(),
-    getItem: (key: string) => (store.has(key) ? (store.get(key) as string) : null),
+    getItem: (key: string) =>
+      store.has(key) ? (store.get(key) as string) : null,
     key: (index: number) => Array.from(store.keys())[index] ?? null,
     removeItem: (key: string) => {
       store.delete(key)
@@ -74,7 +75,11 @@ describe('shouldUpdateHighScore', () => {
   })
 
   it('updates only when strictly greater', () => {
-    const prev = { score: 500, achievedAt: '2025-01-01T00:00:00Z', playerName: 'a' }
+    const prev = {
+      score: 500,
+      achievedAt: '2025-01-01T00:00:00Z',
+      playerName: 'a',
+    }
     expect(shouldUpdateHighScore(499, prev)).toBe(false)
     expect(shouldUpdateHighScore(500, prev)).toBe(false)
     expect(shouldUpdateHighScore(501, prev)).toBe(true)
@@ -106,7 +111,9 @@ describe('computeProgressBackground', () => {
 
   it('clamps out-of-range input', () => {
     expect(computeProgressBackground(-3)).toBe(computeProgressBackground(0))
-    expect(computeProgressBackground(99)).toBe(computeProgressBackground(PROGRESS_LEVEL_MAX))
+    expect(computeProgressBackground(99)).toBe(
+      computeProgressBackground(PROGRESS_LEVEL_MAX)
+    )
   })
 })
 

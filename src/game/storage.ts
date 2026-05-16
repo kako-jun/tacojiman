@@ -96,7 +96,10 @@ function getStorage(): Storage | null {
   }
 }
 
-function readJson<T>(key: string, validate: (value: unknown) => T | null): T | null {
+function readJson<T>(
+  key: string,
+  validate: (value: unknown) => T | null
+): T | null {
   const storage = getStorage()
   if (storage === null) return null
   try {
@@ -233,7 +236,8 @@ export function generatePlayerName(rand: () => number = Math.random): string {
       // ignore and fall through
     }
   }
-  const city = PLAYER_NAME_CITIES[Math.floor(rand() * PLAYER_NAME_CITIES.length)]
+  const city =
+    PLAYER_NAME_CITIES[Math.floor(rand() * PLAYER_NAME_CITIES.length)]
   const number = Math.floor(rand() * 9999) + 1
   const name = `${city}${number.toString().padStart(4, '0')}`
   if (storage !== null) {

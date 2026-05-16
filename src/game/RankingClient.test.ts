@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RankingClient } from './RankingClient'
 
-function makeResponse(init: { ok: boolean; json?: () => Promise<unknown> }): Response {
+function makeResponse(init: {
+  ok: boolean
+  json?: () => Promise<unknown>
+}): Response {
   return {
     ok: init.ok,
     status: init.ok ? 200 : 500,

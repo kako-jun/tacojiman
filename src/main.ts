@@ -33,14 +33,15 @@ async function bootstrap(): Promise<void> {
 
   const gameScene = new GameScene()
 
-  const endingScene = new EndingScene(() => {
-    gameScene.initWithState(createInitialGameState())
-    sceneManager.show('title')
-  })
-
   const titleScene = new TitleScene(() => {
     gameScene.initWithState(createInitialGameState())
     sceneManager.show('game')
+  })
+
+  const endingScene = new EndingScene(() => {
+    gameScene.initWithState(createInitialGameState())
+    titleScene.refresh()
+    sceneManager.show('title')
   })
 
   gameScene.onEnding = (score) => {
