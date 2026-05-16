@@ -78,6 +78,10 @@ export class SoundManager {
     }
   }
 
+  stopTakokongBgm(): void {
+    this.sounds.get('bgm_takokong')?.stop()
+  }
+
   stopAll(): void {
     Howler.stop()
   }
