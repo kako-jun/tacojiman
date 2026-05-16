@@ -44,8 +44,19 @@ async function bootstrap(): Promise<void> {
     sceneManager.show('title')
   })
 
-  gameScene.onEnding = (score) => {
-    endingScene.show(score)
+  // #42: スクリーンショット取得関数を GameScene に注入
+  gameScene.setCaptureCallback(() => {
+    try {
+      const canvas = app.renderer.extract.canvas(app.stage) as HTMLCanvasElement
+      if (typeof canvas.toDataURL !== 'function') return null
+      return canvas.toDataURL('image/png')
+    } catch {
+      return null
+    }
+  })
+
+  gameScene.onEnding = (score, screenshots) => {
+    endingScene.show(score, screenshots)
     sceneManager.show('ending')
   }
 

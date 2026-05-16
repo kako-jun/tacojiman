@@ -61,6 +61,9 @@ function makeMinimalState(overrides: Partial<GameState> = {}): GameState {
     sentries: [],
     decoys: [],
     multiHitBombs: [],
+    rotation: { direction: 1, speed: 0 },
+    screenshots: [],
+    nextScreenshotAt: 60_000,
     ...overrides,
   }
 }

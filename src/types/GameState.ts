@@ -4,6 +4,9 @@ import type {
   ShakeState,
   ZoomState,
 } from '../game/CameraController'
+import { calculateGameTime, formatGameTime } from '../game/domain/TimeManager'
+import { createRotationConfig } from '../game/domain/GameRules'
+import type { RotationConfig } from '../game/domain/GameRules'
 
 export type PanelType =
   | 'water'
@@ -149,7 +152,7 @@ export interface GameState {
   camera: CameraState
   takokongSpawned: boolean
   spawnTimer: number
-  phase: 'ready' | 'playing' | 'ending'
+  phase: 'ready' | 'playing' | 'paused' | 'ending'
   player: PlayerState
   shakeState: ShakeState
   zoomState: ZoomState | null
@@ -173,6 +176,11 @@ export interface GameState {
   sentries: SentryState[]
   decoys: DecoyState[]
   multiHitBombs: MultiHitBombState[]
+  // #41: マップ回転（方向・速度をプレイ毎にランダム化）
+  rotation: RotationConfig
+  // #42: スクリーンショット
+  screenshots: string[]
+  nextScreenshotAt: number
 }
 
 // タココング HP（#37）
@@ -234,6 +242,9 @@ export function createInitialGameState(): GameState {
     sentries: [],
     decoys: [],
     multiHitBombs: [],
+    rotation: createRotationConfig(),
+    screenshots: [],
+    nextScreenshotAt: 60_000,
   }
 }
 
@@ -456,6 +467,18 @@ export function tryBombRecovery(
 }
 
 /**
+ * #45: pause トグルのピュア関数。playing↔paused を切り替えて返す。
+ * 他のフェーズ（ready / ending）は無変更で返す。
+ */
+export function togglePausePhase(
+  phase: GameState['phase']
+): GameState['phase'] {
+  if (phase === 'playing') return 'paused'
+  if (phase === 'paused') return 'playing'
+  return phase
+}
+
+/**
  * mapLayer ローカル座標 (worldX, worldY) が家タップ判定範囲内か。
  * 家は mapLayer の (0, 0) を中心としているので、|x|<=tileSize/2 かつ |y|<=tileSize/2。
  */
@@ -469,9 +492,10 @@ export function isHouseTapped(
 }
 
 export function getClockText(state: GameState): string {
-  const gameMinutes = Math.floor((state.elapsedMs / state.durationMs) * 30)
-  const totalMinutes = state.morningStartMinutes + gameMinutes
-  const hour = Math.floor(totalMinutes / 60)
-  const minute = totalMinutes % 60
-  return `${hour}:${minute.toString().padStart(2, '0')} AM`
+  const t = calculateGameTime(
+    state.elapsedMs,
+    state.durationMs,
+    state.morningStartMinutes
+  )
+  return formatGameTime(t)
 }

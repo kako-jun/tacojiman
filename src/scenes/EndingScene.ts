@@ -1,4 +1,4 @@
-import { Container, Graphics, Rectangle, Text } from 'pixi.js'
+import { Container, Graphics, Rectangle, Sprite, Texture, Text } from 'pixi.js'
 import { VIEW_HEIGHT, VIEW_WIDTH } from '../types/GameState'
 import { rankingClient } from '../game/RankingClient'
 import {
@@ -8,6 +8,7 @@ import {
   saveHighScoreIfNew,
   type TacojimanHighScore,
 } from '../game/storage'
+import { calculateEndingLevel } from '../game/domain/ScoreCalculator'
 
 interface EndingInfo {
   level: number
@@ -16,51 +17,43 @@ interface EndingInfo {
   dialogue: string
 }
 
-const SCORE_THRESHOLDS = {
-  trueEnd: 8001,
-  special: 5001,
-  good: 3001,
-  normal: 1001,
-} as const
-
 function getEndingInfo(score: number): EndingInfo {
-  if (score >= SCORE_THRESHOLDS.trueEnd) {
-    return {
-      level: 5,
-      bgColor: 0xffd700,
-      title: '真エンディング',
-      dialogue: '「ありがとう...今度は私が守るから」',
-    }
-  }
-  if (score >= SCORE_THRESHOLDS.special) {
-    return {
-      level: 4,
-      bgColor: 0xff69b4,
-      title: 'スペシャルエンド',
-      dialogue: '「本当は...好きだったの」',
-    }
-  }
-  if (score >= SCORE_THRESHOLDS.good) {
-    return {
-      level: 3,
-      bgColor: 0x87ceeb,
-      title: 'グッドエンド',
-      dialogue: '「心配してくれてたのね...」',
-    }
-  }
-  if (score >= SCORE_THRESHOLDS.normal) {
-    return {
-      level: 2,
-      bgColor: 0xdda0dd,
-      title: 'ノーマルエンド',
-      dialogue: '「今日は大事な日だったのに...」',
-    }
-  }
-  return {
-    level: 1,
-    bgColor: 0x696969,
-    title: 'バッドエンド',
-    dialogue: '「...」',
+  switch (calculateEndingLevel(score)) {
+    case 'true':
+      return {
+        level: 5,
+        bgColor: 0xffd700,
+        title: '真エンディング',
+        dialogue: '「ありがとう...今度は私が守るから」',
+      }
+    case 'special':
+      return {
+        level: 4,
+        bgColor: 0xff69b4,
+        title: 'スペシャルエンド',
+        dialogue: '「本当は...好きだったの」',
+      }
+    case 'good':
+      return {
+        level: 3,
+        bgColor: 0x87ceeb,
+        title: 'グッドエンド',
+        dialogue: '「心配してくれてたのね...」',
+      }
+    case 'normal':
+      return {
+        level: 2,
+        bgColor: 0xdda0dd,
+        title: 'ノーマルエンド',
+        dialogue: '「今日は大事な日だったのに...」',
+      }
+    default:
+      return {
+        level: 1,
+        bgColor: 0x696969,
+        title: 'バッドエンド',
+        dialogue: '「...」',
+      }
   }
 }
 
@@ -73,6 +66,8 @@ export class EndingScene extends Container {
   private readonly newHighScoreText: Text
   private readonly progressText: Text
   private readonly hintText: Text
+  // #42: スクリーンショット 3 枚を並べる Sprite と HTMLImage を保持
+  private readonly screenshotSprites: Sprite[] = []
 
   constructor(onReplay: () => void) {
     super()
@@ -205,8 +200,9 @@ export class EndingScene extends Container {
     })
   }
 
-  show(score: number): void {
+  show(score: number, screenshots: string[] = []): void {
     const info = getEndingInfo(score)
+    this.renderScreenshots(screenshots)
 
     // 背景再描画
     this.bgGraphics.clear()
@@ -255,5 +251,41 @@ export class EndingScene extends Container {
     }
     if (current.score <= 0) return ''
     return `Best: ${current.score}`
+  }
+
+  /**
+   * #42: スクリーンショット 3 枚を画面下部に横並びで描画する。
+   * dataURL から HTMLImageElement → Texture.from で Sprite 化する。
+   * 既存の Sprite は事前に破棄する。
+   */
+  private renderScreenshots(screenshots: string[]): void {
+    // 既存 Sprite を全て削除
+    for (const s of this.screenshotSprites) {
+      s.destroy()
+    }
+    this.screenshotSprites.length = 0
+
+    if (screenshots.length === 0) return
+
+    // 3 枚を画面下 85% あたりに横並びで配置（小さく）
+    const thumbW = 96
+    const thumbH = 64
+    const gap = 8
+    const totalW = thumbW * 3 + gap * 2
+    const startX = (VIEW_WIDTH - totalW) / 2
+    const baseY = VIEW_HEIGHT * 0.86
+
+    screenshots.slice(0, 3).forEach((url, i) => {
+      const img = new Image()
+      img.src = url
+      const texture = Texture.from(img)
+      const sprite = new Sprite(texture)
+      sprite.width = thumbW
+      sprite.height = thumbH
+      sprite.x = startX + i * (thumbW + gap)
+      sprite.y = baseY
+      this.addChild(sprite)
+      this.screenshotSprites.push(sprite)
+    })
   }
 }
