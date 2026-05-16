@@ -1,8 +1,18 @@
-import { Container, Graphics, Text, type Ticker } from 'pixi.js'
+import {
+  Container,
+  Graphics,
+  Rectangle,
+  Text,
+  type FederatedPointerEvent,
+  type Ticker,
+} from 'pixi.js'
 import gsap from 'gsap'
 import { COLORS, PANEL_COLORS } from '../constants/colors'
 import {
   getClockText,
+  isHouseTapped,
+  pickRandomBomb,
+  tryBombRecovery,
   TILE_SIZE,
   VIEW_HEIGHT,
   VIEW_WIDTH,
@@ -14,9 +24,25 @@ import {
 } from '../types/GameState'
 import { findPath, findWaterGoalPanel, findWaterPath } from '../game/map'
 import { KeyboardManager } from '../game/KeyboardManager'
-import { spawnEnemies } from '../game/EnemyManager'
+import {
+  spawnEnemies,
+  checkAttackHit,
+  ATTACK_RANGE,
+  ATTACK_DAMAGE,
+} from '../game/EnemyManager'
 import { applyBombDamage } from '../game/BombJutsu'
-import { calcShakeOffset, applyZoom } from '../game/CameraController'
+import {
+  calcShakeOffset,
+  getCurrentZoom,
+  screenToWorld,
+  startZoomIn,
+  updateZoom,
+  zoomOut,
+} from '../game/CameraController'
+import {
+  classifyPointerUp,
+  LONG_PRESS_THRESHOLD_MS,
+} from '../game/PointerInput'
 import { GameEventEmitter } from '../game/GameEvents'
 import { EffectManager } from './EffectManager'
 import { SoundManager } from '../game/SoundManager'
@@ -82,6 +108,14 @@ export class GameScene extends Container {
   })
   private readonly minimapGraphics = new Graphics()
   private readonly minimapMarker = new Graphics()
+  // ポインター入力状態
+  private pointerDownAtMs: number | null = null
+  private pointerDownPos: { x: number; y: number } | null = null
+  private isLongPressing = false
+  // ticker now（pointerdown→pointerup 間で経過時間を測るための累積 ms）
+  private nowMs = 0
+  // window blur ハンドラの参照（destroy 時に解除するため）
+  private blurHandler: (() => void) | null = null
 
   constructor() {
     super()
@@ -117,12 +151,38 @@ export class GameScene extends Container {
       this.minimapGraphics,
       this.minimapMarker
     )
+
+    // ポインター入力: scene root 全体をヒット領域にする
+    this.eventMode = 'static'
+    this.hitArea = new Rectangle(0, 0, VIEW_WIDTH, VIEW_HEIGHT)
+    this.on('pointerdown', this.handlePointerDown, this)
+    this.on('pointerup', this.handlePointerUp, this)
+    this.on('pointerupoutside', this.handlePointerUp, this)
+    this.on('pointermove', this.handlePointerMove, this)
   }
 
   initWithState(state: GameState): void {
     this.state = structuredClone(state)
     this.takokongBgmStarted = false
     this.state.phase = 'playing'
+    this.pointerDownAtMs = null
+    this.pointerDownPos = null
+    this.isLongPressing = false
+    this.nowMs = 0
+
+    // window blur で強制ズームアウト（フォーカス喪失時）
+    if (this.blurHandler === null) {
+      this.blurHandler = (): void => {
+        if (this.state === null) return
+        this.pointerDownAtMs = null
+        this.pointerDownPos = null
+        if (this.isLongPressing || this.state.camera.scale > 1) {
+          this.state.camera = zoomOut(this.state.camera)
+        }
+        this.isLongPressing = false
+      }
+      window.addEventListener('blur', this.blurHandler)
+    }
 
     const map = this.state.map
     const width = map.length * TILE_SIZE
@@ -181,10 +241,35 @@ export class GameScene extends Container {
 
   update(ticker: Ticker): void {
     if (this.state === null || this.state.phase !== 'playing') return
+    this.nowMs += ticker.deltaMS
     this.state.elapsedMs = Math.min(
       this.state.durationMs,
       this.state.elapsedMs + ticker.deltaMS
     )
+
+    // ── ボム自動回復（60s, 120s 経過時に +1 個 + 新ランダム抽選） ──
+    const recovery = tryBombRecovery(this.state)
+    if (recovery.recovered > 0) {
+      this.state.bombStock = recovery.newStock
+      this.state.selectedBomb = recovery.newSelected
+      this.state.bombRecoveryThresholds = recovery.newThresholds
+    }
+
+    // ── 長押し検出: pointerdown 後 300ms 経過でズーム開始 ──
+    if (
+      this.pointerDownAtMs !== null &&
+      this.pointerDownPos !== null &&
+      !this.isLongPressing &&
+      this.nowMs - this.pointerDownAtMs >= LONG_PRESS_THRESHOLD_MS
+    ) {
+      this.isLongPressing = true
+      const world = screenToWorld(
+        this.state.camera,
+        this.pointerDownPos.x,
+        this.pointerDownPos.y
+      )
+      this.state.camera = startZoomIn(this.state.camera, world.x, world.y)
+    }
 
     // 時間切れ → ending フェーズへ
     if (this.state.elapsedMs >= this.state.durationMs) {
@@ -249,11 +334,7 @@ export class GameScene extends Container {
     // 新しくスポーンした敵の中に takokong があればズームイン
     for (const e of newEnemies) {
       if (e.type === 'takokong') {
-        this.state.zoomState = {
-          targetScale: 1.5,
-          durationMs: 1000,
-          elapsedMs: 0,
-        }
+        this.state.camera = startZoomIn(this.state.camera, e.x, e.y, 1.5, 1000)
       }
     }
 
@@ -267,19 +348,10 @@ export class GameScene extends Container {
     this.mapLayer.x = VIEW_WIDTH / 2 + dx
     this.mapLayer.y = VIEW_HEIGHT / 2 + dy
 
-    // ズーム適用
-    if (state.zoomState) {
-      state.zoomState.elapsedMs += ticker.deltaMS
-      const t = Math.min(
-        1,
-        state.zoomState.elapsedMs / state.zoomState.durationMs
-      )
-      state.camera = applyZoom(state.camera, state.zoomState.targetScale, t)
-      this.mapLayer.scale.set(state.camera.scale)
-      if (t >= 1) {
-        state.zoomState = null
-      }
-    }
+    // ズーム適用（新 camera.zoom 経路）
+    state.camera = updateZoom(state.camera, ticker.deltaMS)
+    this.mapLayer.scale.set(state.camera.scale)
+    this.mapLayer.pivot.set(state.camera.pivot.x, state.camera.pivot.y)
 
     this.advanceEnemies(ticker.deltaMS)
 
@@ -288,9 +360,13 @@ export class GameScene extends Container {
       if (!state.enemies.some((e) => e.type === 'takokong')) {
         // takokong が消えた（撃破または到達）
         this.takokongDefeated = true
-        state.zoomState = null
+        state.camera = zoomOut(state.camera, 0)
+        // 即座に scale=1, pivot=(0,0) を反映（duration=0 で updateZoom は次フレームに 1 を返す）
         state.camera.scale = 1
+        state.camera.pivot = { x: 0, y: 0 }
+        state.camera.zoom = null
         this.mapLayer.scale.set(1)
+        this.mapLayer.pivot.set(0, 0)
       }
     }
 
@@ -684,7 +760,103 @@ export class GameScene extends Container {
     this.effectManager?.destroy()
     this.sound?.stopAll()
     this.events.clear()
+    if (this.blurHandler !== null) {
+      window.removeEventListener('blur', this.blurHandler)
+      this.blurHandler = null
+    }
     super.destroy()
+  }
+
+  // ─── ポインター入力ハンドラ ─────────────────────────
+  private handlePointerDown(e: FederatedPointerEvent): void {
+    if (this.state === null || this.state.phase !== 'playing') return
+    const screenX = e.global.x
+    const screenY = e.global.y
+
+    // 既にズーム中（連打）→ checkAttackHit を即実行
+    if (this.isLongPressing && this.state.camera.scale > 1) {
+      const world = screenToWorld(this.state.camera, screenX, screenY)
+      this.attackAt(world.x, world.y)
+      return
+    }
+
+    this.pointerDownAtMs = this.nowMs
+    this.pointerDownPos = { x: screenX, y: screenY }
+    this.isLongPressing = false
+  }
+
+  private handlePointerMove(e: FederatedPointerEvent): void {
+    if (this.state === null || this.state.phase !== 'playing') return
+    if (!this.isLongPressing) return
+    // 長押し中はズーム中心を追従させる
+    const world = screenToWorld(this.state.camera, e.global.x, e.global.y)
+    this.state.camera = startZoomIn(this.state.camera, world.x, world.y)
+  }
+
+  private handlePointerUp(e: FederatedPointerEvent): void {
+    if (this.state === null || this.state.phase !== 'playing') return
+    const downAt = this.pointerDownAtMs
+    this.pointerDownAtMs = null
+    this.pointerDownPos = null
+
+    if (downAt === null) return
+
+    const screenX = e.global.x
+    const screenY = e.global.y
+    const world = screenToWorld(this.state.camera, screenX, screenY)
+
+    const kind = classifyPointerUp(downAt, this.nowMs)
+    if (kind === 'long_release' || this.isLongPressing) {
+      // 長押し離し → ズームアウト（攻撃判定は行わない: 旧版踏襲）
+      this.state.camera = zoomOut(this.state.camera)
+      this.isLongPressing = false
+      return
+    }
+
+    // 短タップ: 家タップなら bomb 発動、それ以外は蜂忍術
+    if (isHouseTapped(world.x, world.y)) {
+      this.tryActivateSelectedBomb()
+    } else {
+      this.attackAt(world.x, world.y)
+    }
+  }
+
+  /**
+   * 蜂忍術通常攻撃を発火。zoomMultiplier は現在のズーム倍率を採用する。
+   */
+  private attackAt(worldX: number, worldY: number): void {
+    if (this.state === null) return
+    const zoomMul = getCurrentZoom(this.state.camera)
+    const result = checkAttackHit(
+      this.state,
+      worldX,
+      worldY,
+      ATTACK_RANGE,
+      ATTACK_DAMAGE,
+      zoomMul
+    )
+    if (result.earnedScore > 0) {
+      this.state.score += result.earnedScore
+      this.events.emit('score-gain', {
+        x: worldX,
+        y: worldY,
+        score: result.earnedScore,
+        combo: 1,
+      })
+    }
+  }
+
+  /**
+   * 家タップでの bomb 発動: stock > 0 なら selectedBomb を発動し、stock を 1 減らして
+   * 次の bomb をランダム抽選する。stock==0 なら無視。
+   */
+  private tryActivateSelectedBomb(): void {
+    if (this.state === null) return
+    if (this.state.bombStock <= 0 || this.state.selectedBomb === null) return
+    const type = this.state.selectedBomb
+    this.activateBomb(type)
+    this.state.bombStock -= 1
+    this.state.selectedBomb = pickRandomBomb()
   }
 
   private requireState(): GameState {

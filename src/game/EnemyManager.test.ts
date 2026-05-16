@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  ATTACK_DAMAGE,
+  ATTACK_RANGE,
+  checkAttackHit,
   ENEMY_SPECS,
   selectRandomEnemyType,
   spawnEnemies,
@@ -31,7 +34,13 @@ function makeMinimalState(overrides: Partial<GameState> = {}): GameState {
     morningStartMinutes: 7 * 60,
     map: defaultMap,
     enemies: [],
-    camera: { x: 200, y: 300, scale: 1 },
+    camera: {
+      x: 200,
+      y: 300,
+      scale: 1,
+      pivot: { x: 0, y: 0 },
+      zoom: null,
+    },
     takokongSpawned: false,
     spawnTimer: 0,
     phase: 'playing',
@@ -46,6 +55,7 @@ function makeMinimalState(overrides: Partial<GameState> = {}): GameState {
     spawnRateUpgradeAccumMs: 0,
     maxEnemies: 40,
     maxEnemiesUpgradeAccumMs: 0,
+    bombRecoveryThresholds: [60_000, 120_000],
     ...overrides,
   }
 }
@@ -735,5 +745,214 @@ describe('GameScene 相当のルート組み立て — water/underground 統合'
       y += dy * norm
     }
     expect(removed).toBe(true)
+  })
+})
+
+// ─── checkAttackHit（蜂忍術通常攻撃） ────────────────────────────
+
+describe('checkAttackHit', () => {
+  // 1x1 path のミニマップ + 任意の敵を持つ state を作るヘルパー
+  function makeStateWith(
+    enemies: GameState['enemies'],
+    mapOverride?: MapPanel[][]
+  ): GameState {
+    return makeMinimalState({
+      map: mapOverride ?? [
+        [
+          {
+            x: 0,
+            y: 0,
+            type: 'path',
+            connections: {
+              north: false,
+              south: false,
+              east: false,
+              west: false,
+            },
+          },
+        ],
+      ],
+      enemies,
+    })
+  }
+
+  it('範囲内の敵 HP を damage 分減らす', () => {
+    const state = makeStateWith([
+      {
+        id: 'g1',
+        type: 'ground',
+        hp: 2,
+        speed: 0.4,
+        x: 10,
+        y: 0,
+        routeProgress: 0,
+        route: [],
+      },
+    ])
+    const result = checkAttackHit(state, 0, 0, ATTACK_RANGE, ATTACK_DAMAGE, 1)
+    expect(state.enemies[0].hp).toBe(1)
+    expect(result.damagedEnemyIds).toEqual(['g1'])
+    expect(result.defeatedEnemyIds).toEqual([])
+    expect(result.earnedScore).toBe(0)
+  })
+
+  it('HP<=0 で敵を除去しスコアを加算', () => {
+    const state = makeStateWith([
+      {
+        id: 'a1',
+        type: 'air',
+        hp: 1,
+        speed: 0.6,
+        x: 5,
+        y: 5,
+        routeProgress: 0,
+        route: [],
+      },
+    ])
+    const result = checkAttackHit(state, 0, 0, ATTACK_RANGE, ATTACK_DAMAGE, 1)
+    expect(state.enemies).toHaveLength(0)
+    expect(result.defeatedEnemyIds).toEqual(['a1'])
+    expect(result.earnedScore).toBe(ENEMY_SPECS.air.score)
+  })
+
+  it('範囲外の敵は無視する', () => {
+    const state = makeStateWith([
+      {
+        id: 'g1',
+        type: 'ground',
+        hp: 2,
+        speed: 0.4,
+        x: 1000,
+        y: 1000,
+        routeProgress: 0,
+        route: [],
+      },
+    ])
+    const result = checkAttackHit(state, 0, 0, ATTACK_RANGE, ATTACK_DAMAGE, 1)
+    expect(state.enemies[0].hp).toBe(2)
+    expect(result.damagedEnemyIds).toEqual([])
+    expect(result.defeatedEnemyIds).toEqual([])
+  })
+
+  it('zoomMultiplier がスコアに乗る', () => {
+    const state = makeStateWith([
+      {
+        id: 'a1',
+        type: 'air',
+        hp: 1,
+        speed: 0.6,
+        x: 0,
+        y: 0,
+        routeProgress: 0,
+        route: [],
+      },
+    ])
+    const result = checkAttackHit(state, 0, 0, ATTACK_RANGE, ATTACK_DAMAGE, 3)
+    expect(result.earnedScore).toBe(ENEMY_SPECS.air.score * 3)
+  })
+
+  it('複数の敵を同時に倒した場合のスコア合算', () => {
+    const state = makeStateWith([
+      {
+        id: 'a1',
+        type: 'air',
+        hp: 1,
+        speed: 0.6,
+        x: 10,
+        y: 10,
+        routeProgress: 0,
+        route: [],
+      },
+      {
+        id: 'a2',
+        type: 'air',
+        hp: 1,
+        speed: 0.6,
+        x: -10,
+        y: -10,
+        routeProgress: 0,
+        route: [],
+      },
+    ])
+    const result = checkAttackHit(state, 0, 0, ATTACK_RANGE, ATTACK_DAMAGE, 1)
+    expect(result.defeatedEnemyIds).toHaveLength(2)
+    expect(state.enemies).toHaveLength(0)
+    expect(result.earnedScore).toBe(ENEMY_SPECS.air.score * 2)
+  })
+
+  it('other_house パネル上の敵はスキップ（無敵エリア）', () => {
+    // 3x3 マップで中央が other_house、敵をそこに配置
+    const map: MapPanel[][] = []
+    for (let x = 0; x < 3; x++) {
+      const col: MapPanel[] = []
+      for (let y = 0; y < 3; y++) {
+        col.push({
+          x,
+          y,
+          type: x === 1 && y === 1 ? 'other_house' : 'path',
+          connections: { north: false, south: false, east: false, west: false },
+        })
+      }
+      map.push(col)
+    }
+    // 中央セル（panel(1,1)）の中心ピクセル座標は (0,0)（offset = -3*TILE/2）
+    const state = makeStateWith(
+      [
+        {
+          id: 'g1',
+          type: 'ground',
+          hp: 2,
+          speed: 0.4,
+          x: 0,
+          y: 0,
+          routeProgress: 0,
+          route: [],
+        },
+      ],
+      map
+    )
+    const result = checkAttackHit(state, 0, 0, ATTACK_RANGE, ATTACK_DAMAGE, 1)
+    // 無敵エリアにいるのでダメージなし
+    expect(state.enemies[0].hp).toBe(2)
+    expect(result.damagedEnemyIds).toEqual([])
+  })
+
+  it('station パネル上の敵もスキップ', () => {
+    const map: MapPanel[][] = []
+    for (let x = 0; x < 3; x++) {
+      const col: MapPanel[] = []
+      for (let y = 0; y < 3; y++) {
+        col.push({
+          x,
+          y,
+          type: x === 1 && y === 1 ? 'station' : 'path',
+          connections: { north: false, south: false, east: false, west: false },
+        })
+      }
+      map.push(col)
+    }
+    const state = makeStateWith(
+      [
+        {
+          id: 'g1',
+          type: 'ground',
+          hp: 2,
+          speed: 0.4,
+          x: 0,
+          y: 0,
+          routeProgress: 0,
+          route: [],
+        },
+      ],
+      map
+    )
+    const result = checkAttackHit(state, 0, 0, ATTACK_RANGE, ATTACK_DAMAGE, 1)
+    expect(state.enemies[0].hp).toBe(2)
+    expect(result.damagedEnemyIds).toEqual([])
+  })
+
+  it('ATTACK_RANGE/DAMAGE 定数が定義されている', () => {
+    expect(ATTACK_RANGE).toBe(80)
+    expect(ATTACK_DAMAGE).toBe(1)
   })
 })

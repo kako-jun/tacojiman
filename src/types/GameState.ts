@@ -1,5 +1,9 @@
 import { generateMap } from '../game/map'
-import type { ShakeState, ZoomState } from '../game/CameraController'
+import type {
+  CameraZoomAnim,
+  ShakeState,
+  ZoomState,
+} from '../game/CameraController'
 
 export type PanelType =
   | 'water'
@@ -52,6 +56,8 @@ export interface CameraState {
   x: number
   y: number
   scale: number
+  pivot: { x: number; y: number }
+  zoom: CameraZoomAnim | null
 }
 
 export type Direction = 'north' | 'south' | 'east' | 'west'
@@ -92,6 +98,8 @@ export interface GameState {
   // 動的最大敵数
   maxEnemies: number
   maxEnemiesUpgradeAccumMs: number
+  // ボム回復閾値（経過 ms のリスト。発火時に shift する）
+  bombRecoveryThresholds: number[]
 }
 
 export const VIEW_WIDTH = 400
@@ -106,11 +114,17 @@ export function createInitialGameState(): GameState {
     score: 0,
     combo: 0,
     bombStock: 1,
-    selectedBomb: null,
+    selectedBomb: pickRandomBomb(),
     morningStartMinutes: 7 * 60,
     map: generateMap(19, 25),
     enemies: [],
-    camera: { x: VIEW_WIDTH / 2, y: VIEW_HEIGHT / 2, scale: 1 },
+    camera: {
+      x: VIEW_WIDTH / 2,
+      y: VIEW_HEIGHT / 2,
+      scale: 1,
+      pivot: { x: 0, y: 0 },
+      zoom: null,
+    },
     shakeState: { remainingMs: 0, intensity: 0 },
     zoomState: null,
     takokongSpawned: false,
@@ -130,7 +144,71 @@ export function createInitialGameState(): GameState {
     spawnRateUpgradeAccumMs: 0,
     maxEnemies: 40,
     maxEnemiesUpgradeAccumMs: 0,
+    bombRecoveryThresholds: [60_000, 120_000],
   }
+}
+
+const BOMB_TYPES: BombType[] = [
+  'proton',
+  'muddy',
+  'sentry',
+  'muteki',
+  'sol',
+  'dainsleif',
+  'jakuhou',
+  'bunshin',
+]
+
+/**
+ * 8 種のボムから均等抽選する。テスト用に rand 差し替え可。
+ */
+export function pickRandomBomb(rand: () => number = Math.random): BombType {
+  return BOMB_TYPES[Math.floor(rand() * BOMB_TYPES.length)]
+}
+
+/**
+ * ボム回復閾値の処理。経過時間が先頭閾値を超えていれば 1 個回復し、
+ * 新しい selectedBomb を抽選する。複数閾値を一度に跨ぐ場合も全て処理する。
+ *
+ * 副作用なしのピュア関数。GameScene 側で結果を state に反映する。
+ */
+export function tryBombRecovery(
+  state: GameState,
+  rand: () => number = Math.random
+): {
+  recovered: number
+  newStock: number
+  newSelected: BombType | null
+  newThresholds: number[]
+} {
+  const thresholds = state.bombRecoveryThresholds
+  let recovered = 0
+  let newSelected = state.selectedBomb
+  let i = 0
+  while (i < thresholds.length && state.elapsedMs >= thresholds[i]) {
+    recovered++
+    newSelected = pickRandomBomb(rand)
+    i++
+  }
+  return {
+    recovered,
+    newStock: state.bombStock + recovered,
+    newSelected,
+    newThresholds: thresholds.slice(i),
+  }
+}
+
+/**
+ * mapLayer ローカル座標 (worldX, worldY) が家タップ判定範囲内か。
+ * 家は mapLayer の (0, 0) を中心としているので、|x|<=tileSize/2 かつ |y|<=tileSize/2。
+ */
+export function isHouseTapped(
+  worldX: number,
+  worldY: number,
+  tileSize: number = TILE_SIZE
+): boolean {
+  const half = tileSize / 2
+  return Math.abs(worldX) <= half && Math.abs(worldY) <= half
 }
 
 export function getClockText(state: GameState): string {

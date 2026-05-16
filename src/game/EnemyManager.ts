@@ -7,6 +7,10 @@ import type {
 import { TILE_SIZE } from '../types/GameState'
 import { findPathEdgePosition, findWaterGoalPanel, findWaterPath } from './map'
 
+// 蜂忍術通常攻撃の固定パラメータ
+export const ATTACK_RANGE = 80
+export const ATTACK_DAMAGE = 1
+
 export interface EnemySpec {
   type: EnemyType
   speed: number
@@ -381,4 +385,72 @@ export function spawnEnemies(
   state.spawnTimer = nextTimer
 
   return result
+}
+
+export interface AttackHitResult {
+  defeatedEnemyIds: string[]
+  damagedEnemyIds: string[]
+  earnedScore: number
+}
+
+/**
+ * mapLayer ローカル座標 (worldX, worldY) を中心とした攻撃判定。
+ * - 範囲 (range 半径) 内の敵に damage を与える
+ * - 敵が乗っている panel が 'other_house' / 'station' なら無敵エリア扱いでスキップ
+ * - HP <= 0 になった敵は除去し、スコアに ENEMY_SPECS[type].score * zoomMultiplier を加算
+ *
+ * 副作用あり: state.enemies を破壊的に変更する（HP 更新 + 撃破した敵を除去）。
+ */
+export function checkAttackHit(
+  state: GameState,
+  worldX: number,
+  worldY: number,
+  range: number,
+  damage: number,
+  zoomMultiplier: number
+): AttackHitResult {
+  const defeated: string[] = []
+  const damaged: string[] = []
+  let earned = 0
+
+  const map = state.map
+  const cols = map.length
+  const rows = map[0]?.length ?? 0
+  const width = cols * TILE_SIZE
+  const height = rows * TILE_SIZE
+  const offsetX = -width / 2
+  const offsetY = -height / 2
+
+  const range2 = range * range
+
+  for (let i = state.enemies.length - 1; i >= 0; i--) {
+    const enemy = state.enemies[i]
+    const dx = enemy.x - worldX
+    const dy = enemy.y - worldY
+    if (dx * dx + dy * dy > range2) continue
+
+    // 敵が乗っている panel をチェック（無敵エリア判定）
+    const panelX = Math.floor((enemy.x - offsetX) / TILE_SIZE)
+    const panelY = Math.floor((enemy.y - offsetY) / TILE_SIZE)
+    const panel = map[panelX]?.[panelY]
+    if (panel && (panel.type === 'other_house' || panel.type === 'station')) {
+      continue
+    }
+
+    enemy.hp -= damage
+    if (enemy.hp <= 0) {
+      const score = ENEMY_SPECS[enemy.type].score * zoomMultiplier
+      earned += score
+      defeated.push(enemy.id)
+      state.enemies.splice(i, 1)
+    } else {
+      damaged.push(enemy.id)
+    }
+  }
+
+  return {
+    defeatedEnemyIds: defeated,
+    damagedEnemyIds: damaged,
+    earnedScore: earned,
+  }
 }

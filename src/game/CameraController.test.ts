@@ -1,6 +1,27 @@
 import { describe, it, expect } from 'vitest'
-import { resetCamera, calcShakeOffset, applyZoom } from './CameraController'
+import {
+  resetCamera,
+  calcShakeOffset,
+  applyZoom,
+  startZoomIn,
+  zoomOut,
+  updateZoom,
+  getCurrentZoom,
+  screenToWorld,
+} from './CameraController'
 import { VIEW_WIDTH, VIEW_HEIGHT } from '../types/GameState'
+import type { CameraState } from '../types/GameState'
+
+function makeCam(overrides: Partial<CameraState> = {}): CameraState {
+  return {
+    x: VIEW_WIDTH / 2,
+    y: VIEW_HEIGHT / 2,
+    scale: 1,
+    pivot: { x: 0, y: 0 },
+    zoom: null,
+    ...overrides,
+  }
+}
 
 describe('resetCamera', () => {
   it('VIEW_WIDTH/2, VIEW_HEIGHT/2, scale=1 を返す', () => {
@@ -51,7 +72,13 @@ describe('calcShakeOffset', () => {
 })
 
 describe('applyZoom', () => {
-  const cam = { x: 200, y: 300, scale: 1 }
+  const cam = {
+    x: 200,
+    y: 300,
+    scale: 1,
+    pivot: { x: 0, y: 0 },
+    zoom: null,
+  }
 
   it('t=0 でスケールが変化しない', () => {
     const result = applyZoom(cam, 2, 0)
@@ -75,5 +102,110 @@ describe('applyZoom', () => {
     expect(at75).not.toBeCloseTo(1.75)
     // t=0.5 での値は 1.5（easeInOut(0.5)=0.5）
     expect(result.scale).toBeCloseTo(linear)
+  })
+})
+
+describe('startZoomIn', () => {
+  it('zoom anim を設定し fromScale=現在 scale、toScale=target', () => {
+    const cam = startZoomIn(makeCam(), 100, 50, 3.0, 300)
+    expect(cam.zoom).not.toBeNull()
+    expect(cam.zoom!.fromScale).toBe(1)
+    expect(cam.zoom!.toScale).toBe(3.0)
+    expect(cam.zoom!.toPivot).toEqual({ x: 100, y: 50 })
+    expect(cam.zoom!.durationMs).toBe(300)
+    expect(cam.zoom!.elapsedMs).toBe(0)
+  })
+
+  it('既にズーム中でも再ターゲット可能（追従）', () => {
+    let cam = startZoomIn(
+      makeCam({ scale: 2, pivot: { x: 50, y: 50 } }),
+      100,
+      100
+    )
+    cam = startZoomIn(cam, 200, 80)
+    expect(cam.zoom!.toPivot).toEqual({ x: 200, y: 80 })
+    expect(cam.zoom!.fromScale).toBe(2)
+    expect(cam.zoom!.fromPivot).toEqual({ x: 50, y: 50 })
+  })
+
+  it('デフォルト引数（scale=3.0, duration=300）が適用される', () => {
+    const cam = startZoomIn(makeCam(), 0, 0)
+    expect(cam.zoom!.toScale).toBe(3.0)
+    expect(cam.zoom!.durationMs).toBe(300)
+  })
+})
+
+describe('zoomOut', () => {
+  it('toScale=1, toPivot=(0,0) を設定する', () => {
+    const cam = zoomOut(makeCam({ scale: 3, pivot: { x: 100, y: 50 } }))
+    expect(cam.zoom!.toScale).toBe(1)
+    expect(cam.zoom!.toPivot).toEqual({ x: 0, y: 0 })
+    expect(cam.zoom!.fromScale).toBe(3)
+    expect(cam.zoom!.fromPivot).toEqual({ x: 100, y: 50 })
+  })
+})
+
+describe('updateZoom', () => {
+  it('zoom=null のとき何も起こらない', () => {
+    const cam = makeCam()
+    const next = updateZoom(cam, 100)
+    expect(next.scale).toBe(1)
+    expect(next.zoom).toBeNull()
+  })
+
+  it('途中時点で scale が補間される', () => {
+    const cam = startZoomIn(makeCam(), 100, 0, 3.0, 300)
+    const next = updateZoom(cam, 150) // t=0.5
+    expect(next.scale).toBeGreaterThan(1)
+    expect(next.scale).toBeLessThan(3)
+    expect(next.zoom).not.toBeNull()
+  })
+
+  it('完了時に zoom=null かつ scale=toScale, pivot=toPivot', () => {
+    const cam = startZoomIn(makeCam(), 100, 50, 3.0, 200)
+    const next = updateZoom(cam, 200)
+    expect(next.scale).toBe(3.0)
+    expect(next.pivot).toEqual({ x: 100, y: 50 })
+    expect(next.zoom).toBeNull()
+  })
+
+  it('時間オーバー（deltaMS > durationMs）でも完了状態に正しく落ちる', () => {
+    const cam = startZoomIn(makeCam(), 100, 50, 3.0, 200)
+    const next = updateZoom(cam, 99999)
+    expect(next.scale).toBe(3.0)
+    expect(next.zoom).toBeNull()
+  })
+})
+
+describe('getCurrentZoom', () => {
+  it('camera.scale を返す', () => {
+    expect(getCurrentZoom(makeCam({ scale: 2.5 }))).toBe(2.5)
+  })
+})
+
+describe('screenToWorld', () => {
+  it('scale=1, pivot=(0,0) のとき画面中央が world (0,0)', () => {
+    const cam = makeCam()
+    const w = screenToWorld(cam, VIEW_WIDTH / 2, VIEW_HEIGHT / 2)
+    expect(w).toEqual({ x: 0, y: 0 })
+  })
+
+  it('scale=1, pivot=(0,0) で画面右上は (+offset, -offset)', () => {
+    const cam = makeCam()
+    const w = screenToWorld(cam, VIEW_WIDTH / 2 + 100, VIEW_HEIGHT / 2 - 50)
+    expect(w.x).toBe(100)
+    expect(w.y).toBe(-50)
+  })
+
+  it('scale=2 のときオフセットが半分になる', () => {
+    const cam = makeCam({ scale: 2 })
+    const w = screenToWorld(cam, VIEW_WIDTH / 2 + 100, VIEW_HEIGHT / 2)
+    expect(w.x).toBe(50)
+  })
+
+  it('pivot がずれていれば world にも反映される', () => {
+    const cam = makeCam({ pivot: { x: 30, y: 40 } })
+    const w = screenToWorld(cam, VIEW_WIDTH / 2, VIEW_HEIGHT / 2)
+    expect(w).toEqual({ x: 30, y: 40 })
   })
 })
