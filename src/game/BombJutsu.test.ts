@@ -23,15 +23,23 @@ function makeState(enemies: EnemyState[]): GameState {
 }
 
 describe('applyBombDamage', () => {
-  it('proton: 全敵に1ダメージが入る', () => {
-    const state = makeState([makeEnemy('a', 3), makeEnemy('b', 5)])
+  it('proton: ビーム上（水平方向 |y|<=20）の敵に 1 ダメージ', () => {
+    // #38: proton は線分判定。x=0,y=0 のビームは |y|<=20 が当たる
+    const state = makeState([makeEnemy('a', 3, 0, 0), makeEnemy('b', 5, 100, 0)])
     const result = applyBombDamage(state, 'proton')
     expect(result.hitResults.get('a')).toBe(2)
     expect(result.hitResults.get('b')).toBe(4)
   })
 
+  it('proton: ビームから縦に離れた敵はダメージなし', () => {
+    // #38: |y|>20 はビーム外
+    const state = makeState([makeEnemy('a', 3, 0, 50)])
+    const result = applyBombDamage(state, 'proton')
+    expect(result.hitResults.has('a')).toBe(false)
+  })
+
   it('proton: HP <= 0 の敵が state.enemies から除去される', () => {
-    const state = makeState([makeEnemy('a', 1), makeEnemy('b', 3)])
+    const state = makeState([makeEnemy('a', 1, 0, 0), makeEnemy('b', 3, 0, 0)])
     applyBombDamage(state, 'proton')
     expect(state.enemies.find((e) => e.id === 'a')).toBeUndefined()
     expect(state.enemies.find((e) => e.id === 'b')).toBeDefined()
@@ -60,26 +68,29 @@ describe('applyBombDamage', () => {
     expect(result.hitResults.get('b')).toBe(1)
   })
 
-  it('muddy: ダメージなし（hitResults が空）', () => {
+  it('muddy: ダメージなし（hitResults が空）、地雷が 1 個設置される', () => {
     const state = makeState([makeEnemy('a', 3)])
     const result = applyBombDamage(state, 'muddy')
     expect(result.hitResults.size).toBe(0)
+    expect(state.mines).toHaveLength(1)
   })
 
-  it('sentry: ダメージなし', () => {
+  it('sentry: ダメージなし、砲台が 1 基設置される', () => {
     const state = makeState([makeEnemy('a', 3)])
     const result = applyBombDamage(state, 'sentry')
     expect(result.hitResults.size).toBe(0)
+    expect(state.sentries).toHaveLength(1)
   })
 
-  it('bunshin: ダメージなし', () => {
+  it('bunshin: ダメージなし、分身が 2 つ設置される', () => {
     const state = makeState([makeEnemy('a', 3)])
     const result = applyBombDamage(state, 'bunshin')
     expect(result.hitResults.size).toBe(0)
+    expect(state.decoys).toHaveLength(2)
   })
 
   it('HP=1 の敵が proton ダメージで除去される（hp=0 → フィルタ）', () => {
-    const state = makeState([makeEnemy('x', 1)])
+    const state = makeState([makeEnemy('x', 1, 0, 0)])
     applyBombDamage(state, 'proton')
     expect(state.enemies).toHaveLength(0)
   })
@@ -100,11 +111,21 @@ describe('applyBombDamage', () => {
     expect(state.enemies[0].hp).toBe(41)
   })
 
-  it('dainsleif: 全敵に1ダメージ', () => {
-    const state = makeState([makeEnemy('a', 5), makeEnemy('b', 2)])
+  it('dainsleif: 範囲内敵に初段 1 ダメージが入り、残り 2 段が multiHitBombs に登録される', () => {
+    // #38: dainsleif は多段。初段は即時、残り 2 段は multiHitBombs。
+    // 範囲 80 なので (0,0) は当たる
+    const state = makeState([makeEnemy('a', 5, 0, 0), makeEnemy('b', 2, 0, 0)])
     const result = applyBombDamage(state, 'dainsleif')
     expect(result.hitResults.get('a')).toBe(4)
     expect(result.hitResults.get('b')).toBe(1)
+    expect(state.multiHitBombs).toHaveLength(1)
+    expect(state.multiHitBombs[0].remainingHits).toBe(2)
+  })
+
+  it('dainsleif: 範囲外（>80）の敵は初段ダメージなし', () => {
+    const state = makeState([makeEnemy('far', 5, 200, 0)])
+    const result = applyBombDamage(state, 'dainsleif')
+    expect(result.hitResults.has('far')).toBe(false)
   })
 
   it('enemies が空配列のとき hitResults も空', () => {
@@ -161,6 +182,7 @@ describe('applyBombDamage — #37 takokong バリア軽減 + ボーナス', () =
 
   it('proton（damage=1）バリア中はタココング HP が減らない', () => {
     const state = makeTakokongState(42, true)
+    // takokong は (0,0) にいるのでビーム上に乗っている
     applyBombDamage(state, 'proton')
     expect(state.takokongState!.hp).toBe(42)
     expect(state.enemies[0].hp).toBe(42)
