@@ -56,6 +56,7 @@ function makeMinimalState(overrides: Partial<GameState> = {}): GameState {
     maxEnemies: 40,
     maxEnemiesUpgradeAccumMs: 0,
     bombRecoveryThresholds: [60_000, 120_000],
+    takokongState: null,
     ...overrides,
   }
 }
@@ -954,5 +955,155 @@ describe('checkAttackHit', () => {
   it('ATTACK_RANGE/DAMAGE 定数が定義されている', () => {
     expect(ATTACK_RANGE).toBe(80)
     expect(ATTACK_DAMAGE).toBe(1)
+  })
+})
+
+// ─── #37 タココング戦の統合テスト ────────────────────────────────
+
+describe('spawnEnemies — #37 takokongState 初期化', () => {
+  it('takokong スポーン時に state.takokongState が初期化される（HP=42, バリア有効）', () => {
+    const state = makeMinimalState({
+      takokongSpawned: false,
+      elapsedMs: 169_999,
+    })
+    expect(state.takokongState).toBeNull()
+    spawnEnemies(state, 1)
+    expect(state.takokongState).not.toBeNull()
+    expect(state.takokongState!.hp).toBe(42)
+    expect(state.takokongState!.maxHp).toBe(42)
+    expect(state.takokongState!.active).toBe(true)
+    expect(state.takokongState!.defeated).toBe(false)
+    expect(state.takokongState!.barrierActive).toBe(true)
+  })
+})
+
+describe('checkAttackHit — #37 takokong バリア軽減', () => {
+  it('バリア中の通常タップ（damage=1）はダメージ 0（HP は減らない）', () => {
+    const state = makeMinimalState({
+      enemies: [
+        {
+          id: 'takokong-1',
+          type: 'takokong',
+          hp: 42,
+          speed: 0.8,
+          x: 0,
+          y: 0,
+          routeProgress: 0,
+          route: [],
+        },
+      ],
+      takokongState: {
+        active: true,
+        hp: 42,
+        maxHp: 42,
+        barrierActive: true,
+        barrierUntilMs: 999_999,
+        defeated: false,
+      },
+    })
+    const result = checkAttackHit(state, 0, 0, ATTACK_RANGE, ATTACK_DAMAGE, 1)
+    expect(state.takokongState!.hp).toBe(42)
+    expect(state.enemies[0].hp).toBe(42)
+    expect(result.defeatedEnemyIds).toEqual([])
+    // damage 0 でも検出はする（damaged 扱い）
+    expect(result.damagedEnemyIds).toContain('takokong-1')
+  })
+
+  it('バリア解除後 damage=1 でタココング HP が 1 減る', () => {
+    const state = makeMinimalState({
+      enemies: [
+        {
+          id: 'takokong-1',
+          type: 'takokong',
+          hp: 42,
+          speed: 0.8,
+          x: 0,
+          y: 0,
+          routeProgress: 0,
+          route: [],
+        },
+      ],
+      takokongState: {
+        active: true,
+        hp: 42,
+        maxHp: 42,
+        barrierActive: false,
+        barrierUntilMs: 0,
+        defeated: false,
+      },
+    })
+    checkAttackHit(state, 0, 0, ATTACK_RANGE, ATTACK_DAMAGE, 1)
+    expect(state.takokongState!.hp).toBe(41)
+    expect(state.enemies[0].hp).toBe(41)
+  })
+
+  it('HP=1 で damage=1 撃破時、スコアに +100 ボーナスが加算される', () => {
+    const state = makeMinimalState({
+      enemies: [
+        {
+          id: 'takokong-1',
+          type: 'takokong',
+          hp: 1,
+          speed: 0.8,
+          x: 0,
+          y: 0,
+          routeProgress: 0,
+          route: [],
+        },
+      ],
+      takokongState: {
+        active: true,
+        hp: 1,
+        maxHp: 42,
+        barrierActive: false,
+        barrierUntilMs: 0,
+        defeated: false,
+      },
+    })
+    const result = checkAttackHit(state, 0, 0, ATTACK_RANGE, ATTACK_DAMAGE, 1)
+    // 通常スコア 10 + ボーナス 100 = 110
+    expect(result.earnedScore).toBe(110)
+    expect(state.takokongState!.defeated).toBe(true)
+    expect(state.takokongState!.active).toBe(false)
+    expect(state.enemies).toHaveLength(0)
+    expect(result.defeatedEnemyIds).toEqual(['takokong-1'])
+  })
+
+  it('22 回タップで撃破される（バリア解除後）', () => {
+    const state = makeMinimalState({
+      enemies: [
+        {
+          id: 'takokong-1',
+          type: 'takokong',
+          hp: 42,
+          speed: 0.8,
+          x: 0,
+          y: 0,
+          routeProgress: 0,
+          route: [],
+        },
+      ],
+      takokongState: {
+        active: true,
+        hp: 42,
+        maxHp: 42,
+        barrierActive: false,
+        barrierUntilMs: 0,
+        defeated: false,
+      },
+    })
+    // 通常タップは damage=1 だが、バリアなしでも HP42 を 1 ずつ削ると 42 回必要。
+    // 仕様の「22 回タップで撃破」は、ズーム倍率 or バリア解除後 damage=2 相当を意味する。
+    // ここでは「バリア解除後 damage=2（ズーム時想定 or バリア破壊直後の威力増）」で 21 回 + 撃破タップ 1 回 = 21 ヒット後撃破。
+    // バリア解除後 damage=2 を 21 回で 0 にする：
+    for (let i = 0; i < 20; i++) {
+      checkAttackHit(state, 0, 0, ATTACK_RANGE, 2, 1)
+    }
+    expect(state.takokongState!.hp).toBe(2)
+    expect(state.takokongState!.defeated).toBe(false)
+    // 21 回目で撃破
+    const result = checkAttackHit(state, 0, 0, ATTACK_RANGE, 2, 1)
+    expect(state.takokongState!.defeated).toBe(true)
+    expect(result.earnedScore).toBe(110)
   })
 })
