@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ENEMY_SPECS, selectRandomEnemyType, spawnEnemies } from './EnemyManager'
+import {
+  ENEMY_SPECS,
+  selectRandomEnemyType,
+  spawnEnemies,
+} from './EnemyManager'
 import { createInitialGameState, TILE_SIZE } from '../types/GameState'
 import type { GameState, MapPanel } from '../types/GameState'
 import { findWaterGoalPanel, findWaterPath, generateMap } from './map'
@@ -8,7 +12,12 @@ import { findWaterGoalPanel, findWaterPath, generateMap } from './map'
 function makeMinimalState(overrides: Partial<GameState> = {}): GameState {
   const defaultMap: MapPanel[][] = [
     [
-      { x: 0, y: 0, type: 'path', connections: { north: false, south: true, east: false, west: false } },
+      {
+        x: 0,
+        y: 0,
+        type: 'path',
+        connections: { north: false, south: true, east: false, west: false },
+      },
     ],
   ]
   return {
@@ -45,7 +54,12 @@ function makeMinimalState(overrides: Partial<GameState> = {}): GameState {
 function makeAllPathMap(): MapPanel[][] {
   return [
     [
-      { x: 0, y: 0, type: 'path', connections: { north: false, south: false, east: false, west: false } },
+      {
+        x: 0,
+        y: 0,
+        type: 'path',
+        connections: { north: false, south: false, east: false, west: false },
+      },
     ],
   ]
 }
@@ -96,7 +110,9 @@ describe('spawnEnemies — 初期 3 体スポーン', () => {
     const second = spawnEnemies(state, 200)
     // さらに 200ms 経過 → 3 体目
     const third = spawnEnemies(state, 200)
-    const totalGround = [...first, ...second, ...third].filter((e) => e.type === 'ground').length
+    const totalGround = [...first, ...second, ...third].filter(
+      (e) => e.type === 'ground'
+    ).length
     expect(totalGround).toBeGreaterThanOrEqual(3)
     expect(state.initialEnemiesSpawned).toBe(true)
     expect(state.initialEnemiesRemaining).toBe(0)
@@ -187,7 +203,14 @@ describe('spawnEnemies — 動的最大敵数', () => {
   it('現在の敵数が maxEnemies に達しているときは新規スポーンしない', () => {
     // 既に 40 体いる状態で spawnInterval を跨いでもスポーンしない
     const map: MapPanel[][] = [
-      [{ x: 0, y: 0, type: 'path', connections: { north: false, south: false, east: false, west: false } }],
+      [
+        {
+          x: 0,
+          y: 0,
+          type: 'path',
+          connections: { north: false, south: false, east: false, west: false },
+        },
+      ],
     ]
     const fakeEnemies = Array.from({ length: 40 }, (_, i) => ({
       id: `ground-${i}`,
@@ -234,7 +257,10 @@ describe('spawnEnemies — 状態遷移', () => {
   })
 
   it('takokong スポーン後に state.takokongSpawned が true に書き換えられている', () => {
-    const state = makeMinimalState({ takokongSpawned: false, elapsedMs: 169_999 })
+    const state = makeMinimalState({
+      takokongSpawned: false,
+      elapsedMs: 169_999,
+    })
     spawnEnemies(state, 1)
     expect(state.takokongSpawned).toBe(true)
   })
@@ -280,7 +306,10 @@ describe('spawnEnemies — ID フォーマット', () => {
   })
 
   it('takokong がスポーンした敵の id が "takokong-" で始まる', () => {
-    const state = makeMinimalState({ takokongSpawned: false, elapsedMs: 170_000 })
+    const state = makeMinimalState({
+      takokongSpawned: false,
+      elapsedMs: 170_000,
+    })
     const result = spawnEnemies(state, 1)
     const takokongs = result.filter((e) => e.type === 'takokong')
     expect(takokongs.length).toBe(1)
@@ -328,10 +357,10 @@ describe('selectRandomEnemyType — 確率分布', () => {
     }
     expect(counts.ground / N).toBeGreaterThan(0.45)
     expect(counts.ground / N).toBeLessThan(0.55)
-    expect(counts.water / N).toBeGreaterThan(0.20)
-    expect(counts.water / N).toBeLessThan(0.30)
-    expect(counts.air / N).toBeGreaterThan(0.10)
-    expect(counts.air / N).toBeLessThan(0.20)
+    expect(counts.water / N).toBeGreaterThan(0.2)
+    expect(counts.water / N).toBeLessThan(0.3)
+    expect(counts.air / N).toBeGreaterThan(0.1)
+    expect(counts.air / N).toBeLessThan(0.2)
     expect(counts.underground / N).toBeGreaterThan(0.05)
     expect(counts.underground / N).toBeLessThan(0.15)
   })
@@ -358,7 +387,12 @@ describe('spawnEnemies — マップ異常系', () => {
     // 全セル path、player_house なし
     const map: MapPanel[][] = [
       [
-        { x: 0, y: 0, type: 'path', connections: { north: false, south: false, east: false, west: false } },
+        {
+          x: 0,
+          y: 0,
+          type: 'path',
+          connections: { north: false, south: false, east: false, west: false },
+        },
       ],
     ]
     const state = makeMinimalState({
@@ -379,7 +413,12 @@ describe('spawnEnemies — マップ異常系', () => {
     // player_house あり、water/river なし
     const map: MapPanel[][] = [
       [
-        { x: 0, y: 0, type: 'player_house', connections: { north: false, south: false, east: false, west: false } },
+        {
+          x: 0,
+          y: 0,
+          type: 'player_house',
+          connections: { north: false, south: false, east: false, west: false },
+        },
       ],
     ]
     const state = makeMinimalState({
@@ -408,7 +447,12 @@ describe('spawnEnemies — マップ異常系', () => {
     // player_house あり、rice_field なし
     const map: MapPanel[][] = [
       [
-        { x: 0, y: 0, type: 'player_house', connections: { north: false, south: false, east: false, west: false } },
+        {
+          x: 0,
+          y: 0,
+          type: 'player_house',
+          connections: { north: false, south: false, east: false, west: false },
+        },
       ],
     ]
     const state = makeMinimalState({
@@ -434,7 +478,12 @@ describe('spawnEnemies — 初期 3 体スポーンのバグ修正凍結', () =>
     // player_house のみ、path タイルなし（端 path が見つからない）
     const map: MapPanel[][] = [
       [
-        { x: 0, y: 0, type: 'player_house', connections: { north: false, south: false, east: false, west: false } },
+        {
+          x: 0,
+          y: 0,
+          type: 'player_house',
+          connections: { north: false, south: false, east: false, west: false },
+        },
       ],
     ]
     const state = makeMinimalState({
@@ -600,7 +649,11 @@ describe('GameScene 相当のルート組み立て — water/underground 統合'
 
     // water 敵を直接スポーンさせるため Math.random を 0.6 に固定（water 選択）
     const randSpy = vi.spyOn(Math, 'random').mockReturnValue(0.6)
-    let waterEnemy: { x: number; y: number; route: Array<{ x: number; y: number }> } | null = null
+    let waterEnemy: {
+      x: number
+      y: number
+      route: Array<{ x: number; y: number }>
+    } | null = null
     try {
       // 初期 3 体を消化させる
       spawnEnemies(state, 1)
@@ -621,7 +674,9 @@ describe('GameScene 相当のルート組み立て — water/underground 統合'
         expect(waterGoal).not.toBeNull()
         const route = findWaterPath(map, { x: startX, y: startY }, waterGoal!)
         const fullRoute =
-          route.length > 0 ? [...route, { x: goal.x, y: goal.y }] : [{ x: goal.x, y: goal.y }]
+          route.length > 0
+            ? [...route, { x: goal.x, y: goal.y }]
+            : [{ x: goal.x, y: goal.y }]
         waterEnemy = { x: w.x, y: w.y, route: fullRoute }
       }
     } finally {
@@ -640,7 +695,12 @@ describe('GameScene 相当のルート組み立て — water/underground 統合'
 
     // underground を確実に出すため rand=0.95 に固定
     const randSpy = vi.spyOn(Math, 'random').mockReturnValue(0.95)
-    let undergroundEnemy: { x: number; y: number; speed: number; route: unknown[] } | null = null
+    let undergroundEnemy: {
+      x: number
+      y: number
+      speed: number
+      route: unknown[]
+    } | null = null
     try {
       // 初期 3 体消化
       spawnEnemies(state, 1)
@@ -648,7 +708,8 @@ describe('GameScene 相当のルート組み立て — water/underground 統合'
       spawnEnemies(state, 200)
       const result = spawnEnemies(state, 500)
       const u = result.find((e) => e.type === 'underground')
-      if (u) undergroundEnemy = { x: u.x, y: u.y, speed: u.speed, route: u.route }
+      if (u)
+        undergroundEnemy = { x: u.x, y: u.y, speed: u.speed, route: u.route }
     } finally {
       randSpy.mockRestore()
     }
@@ -676,4 +737,3 @@ describe('GameScene 相当のルート組み立て — water/underground 統合'
     expect(removed).toBe(true)
   })
 })
-

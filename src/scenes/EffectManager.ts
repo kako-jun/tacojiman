@@ -12,11 +12,11 @@ export class EffectManager {
 
   // スコア獲得フローティングテキスト
   showScoreGain(event: ScoreGainEvent): void {
-    const label = event.combo > 1
-      ? `+${event.score} × ${event.combo}`
-      : `+${event.score}`
+    const label =
+      event.combo > 1 ? `+${event.score} × ${event.combo}` : `+${event.score}`
 
-    const color = event.combo >= 3 ? 0xffdd00 : event.combo >= 2 ? 0xff8800 : 0xffffff
+    const color =
+      event.combo >= 3 ? 0xffdd00 : event.combo >= 2 ? 0xff8800 : 0xffffff
 
     const text = new Text({
       text: label,

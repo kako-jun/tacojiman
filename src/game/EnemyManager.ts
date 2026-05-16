@@ -1,4 +1,9 @@
-import type { EnemyState, EnemyType, GameState, MapPanel } from '../types/GameState'
+import type {
+  EnemyState,
+  EnemyType,
+  GameState,
+  MapPanel,
+} from '../types/GameState'
 import { TILE_SIZE } from '../types/GameState'
 import { findPathEdgePosition, findWaterGoalPanel, findWaterPath } from './map'
 
@@ -18,7 +23,10 @@ export const ENEMY_SPECS: Record<EnemyType, EnemySpec> = {
 }
 
 // 重み付き選択（旧Phaser版準拠）
-const ENEMY_WEIGHTS: Array<{ type: Exclude<EnemyType, 'takokong'>; weight: number }> = [
+const ENEMY_WEIGHTS: Array<{
+  type: Exclude<EnemyType, 'takokong'>
+  weight: number
+}> = [
   { type: 'ground', weight: 0.5 },
   { type: 'water', weight: 0.25 },
   { type: 'air', weight: 0.15 },
@@ -100,11 +108,7 @@ function panelToPixel(
   }
 }
 
-function makeEnemy(
-  type: EnemyType,
-  x: number,
-  y: number
-): EnemyState {
+function makeEnemy(type: EnemyType, x: number, y: number): EnemyState {
   const spec = ENEMY_SPECS[type]
   return {
     id: makeId(type),
@@ -184,7 +188,10 @@ function makeWaterEnemy(
  * 空タコのスポーン位置（4 辺ランダム入射）を返す。
  * 出現したら家 (0,0) 方向へ直進する（移動は GameScene 側）。
  */
-function makeAirEnemy(ctx: SpawnContext, rand: () => number = Math.random): EnemyState {
+function makeAirEnemy(
+  ctx: SpawnContext,
+  rand: () => number = Math.random
+): EnemyState {
   const margin = 200
   const edge = Math.floor(rand() * 4)
   let x: number
@@ -233,7 +240,9 @@ function makeUndergroundEnemy(
   if (ctx.goalPanel) {
     const goal = ctx.goalPanel
     const near = allRiceFields.filter(
-      (p) => Math.abs(p.x - goal.x) + Math.abs(p.y - goal.y) <= UNDERGROUND_HOUSE_RADIUS
+      (p) =>
+        Math.abs(p.x - goal.x) + Math.abs(p.y - goal.y) <=
+        UNDERGROUND_HOUSE_RADIUS
     )
     if (near.length > 0) candidates = near
   }
@@ -303,7 +312,10 @@ export function spawnEnemies(
   // 初回呼び出しで 1 体即時、その後 200ms 間隔で残り 2 体。
   if (!state.initialEnemiesSpawned) {
     state.initialEnemiesNextDelayMs -= deltaMS
-    if (state.initialEnemiesRemaining > 0 && state.initialEnemiesNextDelayMs <= 0) {
+    if (
+      state.initialEnemiesRemaining > 0 &&
+      state.initialEnemiesNextDelayMs <= 0
+    ) {
       const enemy = makeGroundEnemy(ctx)
       if (enemy !== null) {
         result.push(enemy)
@@ -333,7 +345,10 @@ export function spawnEnemies(
   state.maxEnemiesUpgradeAccumMs += deltaMS
   while (state.maxEnemiesUpgradeAccumMs >= MAX_ENEMIES_UPGRADE_INTERVAL_MS) {
     state.maxEnemiesUpgradeAccumMs -= MAX_ENEMIES_UPGRADE_INTERVAL_MS
-    state.maxEnemies = Math.min(MAX_ENEMIES_CAP, state.maxEnemies + MAX_ENEMIES_INCREMENT)
+    state.maxEnemies = Math.min(
+      MAX_ENEMIES_CAP,
+      state.maxEnemies + MAX_ENEMIES_INCREMENT
+    )
   }
 
   // ── 通常スポーン（spawnIntervalMs ごと、weighted random）──

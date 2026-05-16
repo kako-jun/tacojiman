@@ -115,7 +115,7 @@ export class GameScene extends Container {
       this.bombText,
       this.bombStockText,
       this.minimapGraphics,
-      this.minimapMarker,
+      this.minimapMarker
     )
   }
 
@@ -249,13 +249,20 @@ export class GameScene extends Container {
     // 新しくスポーンした敵の中に takokong があればズームイン
     for (const e of newEnemies) {
       if (e.type === 'takokong') {
-        this.state.zoomState = { targetScale: 1.5, durationMs: 1000, elapsedMs: 0 }
+        this.state.zoomState = {
+          targetScale: 1.5,
+          durationMs: 1000,
+          elapsedMs: 0,
+        }
       }
     }
 
     // シェイク適用
     const state = this.state
-    const { dx, dy, nextShake } = calcShakeOffset(state.shakeState, ticker.deltaMS)
+    const { dx, dy, nextShake } = calcShakeOffset(
+      state.shakeState,
+      ticker.deltaMS
+    )
     state.shakeState = nextShake
     this.mapLayer.x = VIEW_WIDTH / 2 + dx
     this.mapLayer.y = VIEW_HEIGHT / 2 + dy
@@ -263,7 +270,10 @@ export class GameScene extends Container {
     // ズーム適用
     if (state.zoomState) {
       state.zoomState.elapsedMs += ticker.deltaMS
-      const t = Math.min(1, state.zoomState.elapsedMs / state.zoomState.durationMs)
+      const t = Math.min(
+        1,
+        state.zoomState.elapsedMs / state.zoomState.durationMs
+      )
       state.camera = applyZoom(state.camera, state.zoomState.targetScale, t)
       this.mapLayer.scale.set(state.camera.scale)
       if (t >= 1) {
@@ -275,7 +285,7 @@ export class GameScene extends Container {
 
     // takokong が消えたらズームリセット
     if (state.takokongSpawned && !this.takokongDefeated) {
-      if (!state.enemies.some(e => e.type === 'takokong')) {
+      if (!state.enemies.some((e) => e.type === 'takokong')) {
         // takokong が消えた（撃破または到達）
         this.takokongDefeated = true
         state.zoomState = null
@@ -534,7 +544,12 @@ export class GameScene extends Container {
     const hpGap = 2
     for (let i = 0; i < maxHp; i++) {
       const color = i < state.playerHp ? COLORS.enemyHp2 : 0x555555
-      this.uiGraphics.rect(14 + i * (hpBoxSize + hpGap), 42, hpBoxSize, hpBoxSize)
+      this.uiGraphics.rect(
+        14 + i * (hpBoxSize + hpGap),
+        42,
+        hpBoxSize,
+        hpBoxSize
+      )
       this.uiGraphics.fill(color)
     }
 
@@ -544,8 +559,8 @@ export class GameScene extends Container {
 
     // プレイヤーマーカー（ミニマップ）
     const map = state.map
-    const mapW = map.length        // 19
-    const mapH = map[0].length     // 25
+    const mapW = map.length // 19
+    const mapH = map[0].length // 25
     const mmW = 80
     const mmH = 80
     const cellW = mmW / mapW
