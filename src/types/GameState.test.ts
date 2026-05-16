@@ -7,6 +7,7 @@ import {
   pickRandomBomb,
   pickSentryTarget,
   tickMultiHitBomb,
+  togglePausePhase,
   triggerMineIfHit,
   tryBombRecovery,
   TILE_SIZE,
@@ -260,5 +261,18 @@ describe('createInitialGameState — #38 仕掛け系配列が初期化', () => 
     expect(state.sentries).toEqual([])
     expect(state.decoys).toEqual([])
     expect(state.multiHitBombs).toEqual([])
+  })
+})
+
+describe('togglePausePhase (#45)', () => {
+  it('playing → paused', () => {
+    expect(togglePausePhase('playing')).toBe('paused')
+  })
+  it('paused → playing', () => {
+    expect(togglePausePhase('paused')).toBe('playing')
+  })
+  it('ready / ending は変化なし', () => {
+    expect(togglePausePhase('ready')).toBe('ready')
+    expect(togglePausePhase('ending')).toBe('ending')
   })
 })

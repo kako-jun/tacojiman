@@ -155,7 +155,7 @@ export interface GameState {
   camera: CameraState
   takokongSpawned: boolean
   spawnTimer: number
-  phase: 'ready' | 'playing' | 'ending'
+  phase: 'ready' | 'playing' | 'paused' | 'ending'
   player: PlayerState
   shakeState: ShakeState
   zoomState: ZoomState | null
@@ -467,6 +467,18 @@ export function tryBombRecovery(
     newSelected,
     newThresholds: thresholds.slice(i),
   }
+}
+
+/**
+ * #45: pause トグルのピュア関数。playing↔paused を切り替えて返す。
+ * 他のフェーズ（ready / ending）は無変更で返す。
+ */
+export function togglePausePhase(
+  phase: GameState['phase']
+): GameState['phase'] {
+  if (phase === 'playing') return 'paused'
+  if (phase === 'paused') return 'playing'
+  return phase
 }
 
 /**

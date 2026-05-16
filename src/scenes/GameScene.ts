@@ -18,6 +18,7 @@ import {
   tickMultiHitBomb,
   tickTakokongBarrier,
   tickTakokongCountdown,
+  togglePausePhase,
   triggerMineIfHit,
   tryBombRecovery,
   TILE_SIZE,
@@ -142,6 +143,17 @@ export class GameScene extends Container {
     },
   })
   private takokongCleanupDone = false
+  // #45: ポーズ表示テキスト
+  private readonly pauseOverlayText = new Text({
+    text: 'PAUSE',
+    style: {
+      fill: 0xffffff,
+      fontFamily: 'monospace',
+      fontSize: 56,
+      fontWeight: '900',
+      stroke: { color: 0x000000, width: 6 },
+    },
+  })
   // ポインター入力状態
   private pointerDownAtMs: number | null = null
   private pointerDownPos: { x: number; y: number } | null = null
@@ -184,6 +196,11 @@ export class GameScene extends Container {
     this.takokongCountdownText.x = VIEW_WIDTH / 2
     this.takokongCountdownText.y = VIEW_HEIGHT / 2
     this.takokongCountdownText.visible = false
+    // #45: ポーズ表示
+    this.pauseOverlayText.anchor.set(0.5)
+    this.pauseOverlayText.x = VIEW_WIDTH / 2
+    this.pauseOverlayText.y = VIEW_HEIGHT / 2
+    this.pauseOverlayText.visible = false
     this.uiLayer.addChild(
       this.clockText,
       this.scoreText,
@@ -193,7 +210,8 @@ export class GameScene extends Container {
       this.minimapGraphics,
       this.minimapMarker,
       this.takokongHpBar,
-      this.takokongCountdownText
+      this.takokongCountdownText,
+      this.pauseOverlayText
     )
 
     // ポインター入力: scene root 全体をヒット領域にする
@@ -216,6 +234,7 @@ export class GameScene extends Container {
     this.nowMs = 0
     this.takokongHpBar.clear()
     this.takokongCountdownText.visible = false
+    this.pauseOverlayText.visible = false
 
     // window blur で強制ズームアウト（フォーカス喪失時）
     if (this.blurHandler === null) {
@@ -295,7 +314,14 @@ export class GameScene extends Container {
   }
 
   update(ticker: Ticker): void {
-    if (this.state === null || this.state.phase !== 'playing') return
+    if (this.state === null) return
+    // #45: SPACE で pause トグル（playing ↔ paused）。ending/ready では無視
+    if (this.keyboard !== null && this.keyboard.consumePauseToggle()) {
+      this.state.phase = togglePausePhase(this.state.phase)
+      // pause 中はポーズ表示
+      this.pauseOverlayText.visible = this.state.phase === 'paused'
+    }
+    if (this.state.phase !== 'playing') return
     this.nowMs += ticker.deltaMS
     this.state.elapsedMs = Math.min(
       this.state.durationMs,

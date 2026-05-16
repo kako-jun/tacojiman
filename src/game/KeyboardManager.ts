@@ -2,17 +2,24 @@ import type { Direction } from '../types/GameState'
 
 export class KeyboardManager {
   private readonly keys = new Set<string>()
+  // #45: SPACE 押下を「1 回だけ」拾うためのエッジ検出フラグ
+  private pausePressed = false
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
-    this.keys.add(e.key)
     if (
       e.key === 'ArrowUp' ||
       e.key === 'ArrowDown' ||
       e.key === 'ArrowLeft' ||
-      e.key === 'ArrowRight'
+      e.key === 'ArrowRight' ||
+      e.key === ' '
     ) {
       e.preventDefault()
     }
+    // #45: SPACE はリピート抑止して 1 押下 = 1 エッジに
+    if (e.key === ' ' && !e.repeat && !this.keys.has(' ')) {
+      this.pausePressed = true
+    }
+    this.keys.add(e.key)
   }
 
   private readonly onKeyUp = (e: KeyboardEvent): void => {
@@ -29,7 +36,18 @@ export class KeyboardManager {
   }
 
   getBombKey(): boolean {
-    return this.isPressed('b') || this.isPressed('B') || this.isPressed(' ')
+    // #45: SPACE は pause 専用に移行したので bomb トリガから外す
+    return this.isPressed('b') || this.isPressed('B')
+  }
+
+  /**
+   * #45: SPACE のエッジ検出。直前フレームで押された場合のみ true を返し、
+   * フラグはクリアする（リピート抑止）。
+   */
+  consumePauseToggle(): boolean {
+    if (!this.pausePressed) return false
+    this.pausePressed = false
+    return true
   }
 
   getDirection(): Direction | null {
