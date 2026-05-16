@@ -59,10 +59,19 @@ import {
 import { GameEventEmitter } from '../game/GameEvents'
 import { EffectManager } from './EffectManager'
 import { SoundManager } from '../game/SoundManager'
+import {
+  computeNextScreenshotAt,
+  isScreenshotLimitReached,
+  SCREENSHOT_INTERVAL_MS,
+  SCREENSHOT_MAX_COUNT,
+  shouldTakeScreenshot,
+} from '../game/ScreenshotManager'
 
 export class GameScene extends Container {
-  onEnding: ((score: number) => void) | null = null
+  onEnding: ((score: number, screenshots: string[]) => void) | null = null
   private state: GameState | null = null
+  // #42: スクリーンショット取得コールバック。main.ts から注入する。
+  private captureScreenshot: (() => string | null) | null = null
   private readonly mapLayer = new Container()
   private readonly enemyLayer = new Container()
   private readonly playerLayer = new Container()
@@ -277,6 +286,14 @@ export class GameScene extends Container {
     return this.state === null ? null : structuredClone(this.state)
   }
 
+  /**
+   * #42: スクリーンショット取得関数を注入する。
+   * main.ts 側で `app.renderer.extract.canvas(app.stage).toDataURL()` を渡す想定。
+   */
+  setCaptureCallback(fn: (() => string | null) | null): void {
+    this.captureScreenshot = fn
+  }
+
   update(ticker: Ticker): void {
     if (this.state === null || this.state.phase !== 'playing') return
     this.nowMs += ticker.deltaMS
@@ -311,15 +328,38 @@ export class GameScene extends Container {
       this.state.camera = startZoomIn(this.state.camera, world.x, world.y)
     }
 
+    // #42: スクリーンショット撮影タイミング
+    if (
+      this.captureScreenshot !== null &&
+      !isScreenshotLimitReached(
+        this.state.screenshots.length,
+        SCREENSHOT_MAX_COUNT
+      ) &&
+      shouldTakeScreenshot(this.state.elapsedMs, this.state.nextScreenshotAt)
+    ) {
+      const dataUrl = this.captureScreenshot()
+      if (dataUrl !== null) {
+        this.state.screenshots.push(dataUrl)
+      }
+      this.state.nextScreenshotAt = computeNextScreenshotAt(
+        this.state.nextScreenshotAt,
+        SCREENSHOT_INTERVAL_MS
+      )
+    }
+
     // 時間切れ → ending フェーズへ
     if (this.state.elapsedMs >= this.state.durationMs) {
       // phase を 'ending' に設定してから return することで以降のフレームは早期 return される
       this.state.phase = 'ending'
-      this.onEnding?.(this.state.score)
+      this.onEnding?.(this.state.score, [...this.state.screenshots])
       return
     }
 
-    this.mapLayer.rotation += 0.00005 * ticker.deltaMS
+    // #41: ランダム方向・速度（2〜3 分/周）でマップ回転
+    this.mapLayer.rotation +=
+      this.state.rotation.direction *
+      this.state.rotation.speed *
+      ticker.deltaMS
 
     // スポーン
     const map = this.state.map

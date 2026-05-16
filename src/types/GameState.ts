@@ -8,6 +8,8 @@ import {
   calculateGameTime,
   formatGameTime,
 } from '../game/domain/TimeManager'
+import { createRotationConfig } from '../game/domain/GameRules'
+import type { RotationConfig } from '../game/domain/GameRules'
 
 export type PanelType =
   | 'water'
@@ -177,6 +179,11 @@ export interface GameState {
   sentries: SentryState[]
   decoys: DecoyState[]
   multiHitBombs: MultiHitBombState[]
+  // #41: マップ回転（方向・速度をプレイ毎にランダム化）
+  rotation: RotationConfig
+  // #42: スクリーンショット
+  screenshots: string[]
+  nextScreenshotAt: number
 }
 
 // タココング HP（#37）
@@ -238,6 +245,9 @@ export function createInitialGameState(): GameState {
     sentries: [],
     decoys: [],
     multiHitBombs: [],
+    rotation: createRotationConfig(),
+    screenshots: [],
+    nextScreenshotAt: 60_000,
   }
 }
 

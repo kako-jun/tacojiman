@@ -29,3 +29,23 @@ export const MAX_ENEMIES_CAP = 70
 
 /** 初期 3 体の地上タコのスポーン間隔（ms） */
 export const INITIAL_GROUND_SPAWN_INTERVAL_MS = 200
+
+/**
+ * マップ回転設定（#41）。
+ * - direction: 1 = 反時計回り（rotation += 正方向）、-1 = 時計回り
+ * - speed: 1 ms あたりのラジアン量。2π / (120000〜180000 ms) = 約 2〜3 分/周
+ */
+export interface RotationConfig {
+  direction: 1 | -1
+  speed: number
+}
+
+/** #41: ランダムな回転方向と速度（2〜3 分/周）を生成する。 */
+export function createRotationConfig(
+  rand: () => number = Math.random
+): RotationConfig {
+  const direction: 1 | -1 = rand() < 0.5 ? 1 : -1
+  const durationMs = 120_000 + rand() * 60_000 // 2〜3 分
+  const speed = (Math.PI * 2) / durationMs
+  return { direction, speed }
+}
