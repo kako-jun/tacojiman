@@ -298,21 +298,21 @@ export function spawnEnemies(
   const nextTimer = prevTimer + deltaMS
 
   // ── 初期 3 体地上タコスポーン ─────────────────────────
-  // 初回呼び出しで 1 体即時、その後 200ms 間隔で残り 2 体
+  // S4: legacy Phaser 版が delayedCall で 200ms 刻みに発火していた挙動に合わせ、
+  // 「1 フレームに最大 1 体ずつ」スポーンする（while ではなく if）。
+  // 初回呼び出しで 1 体即時、その後 200ms 間隔で残り 2 体。
   if (!state.initialEnemiesSpawned) {
     state.initialEnemiesNextDelayMs -= deltaMS
-    while (state.initialEnemiesRemaining > 0 && state.initialEnemiesNextDelayMs <= 0) {
+    if (state.initialEnemiesRemaining > 0 && state.initialEnemiesNextDelayMs <= 0) {
       const enemy = makeGroundEnemy(ctx)
-      if (enemy === null) {
-        // path タイル等が無いマップでは消費せず次フレームで再試行する
-        // （無限ループ防止のためここで break する）
-        break
+      if (enemy !== null) {
+        result.push(enemy)
+        state.initialEnemiesRemaining -= 1
+        if (state.initialEnemiesRemaining > 0) {
+          state.initialEnemiesNextDelayMs += INITIAL_GROUND_SPAWN_INTERVAL_MS
+        }
       }
-      result.push(enemy)
-      state.initialEnemiesRemaining -= 1
-      if (state.initialEnemiesRemaining > 0) {
-        state.initialEnemiesNextDelayMs += INITIAL_GROUND_SPAWN_INTERVAL_MS
-      }
+      // enemy === null（path タイル等が無いマップ）の場合は消費せず次フレームで再試行
     }
     if (state.initialEnemiesRemaining <= 0) {
       state.initialEnemiesSpawned = true
