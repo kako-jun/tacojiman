@@ -159,11 +159,38 @@ function makeWaterEnemy(ctx: SpawnContext): EnemyState | null {
 }
 
 /**
- * 空タコのスポーン位置（マップ左外）を返す。
+ * 空タコのスポーン位置（4 辺ランダム入射）を返す。
+ * 出現したら家 (0,0) 方向へ直進する（移動は GameScene 側）。
  */
-function makeAirEnemy(ctx: SpawnContext): EnemyState {
-  const randomY = ctx.offsetY + Math.random() * ctx.height
-  return makeEnemy('air', ctx.offsetX - 200, randomY)
+function makeAirEnemy(ctx: SpawnContext, rand: () => number = Math.random): EnemyState {
+  const margin = 200
+  const edge = Math.floor(rand() * 4)
+  let x = 0
+  let y = 0
+  switch (edge) {
+    case 0:
+      // 上辺
+      x = ctx.offsetX + rand() * ctx.width
+      y = ctx.offsetY - margin
+      break
+    case 1:
+      // 右辺
+      x = ctx.offsetX + ctx.width + margin
+      y = ctx.offsetY + rand() * ctx.height
+      break
+    case 2:
+      // 下辺
+      x = ctx.offsetX + rand() * ctx.width
+      y = ctx.offsetY + ctx.height + margin
+      break
+    case 3:
+    default:
+      // 左辺
+      x = ctx.offsetX - margin
+      y = ctx.offsetY + rand() * ctx.height
+      break
+  }
+  return makeEnemy('air', x, y)
 }
 
 /**

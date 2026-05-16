@@ -617,12 +617,17 @@ export class GameScene extends Container {
           enemy.y = from.py + (to.py - from.py) * segT
         }
       } else {
-        // air: 左から右へ直線移動
+        // air: 4 辺ランダム入射 → 家 (0,0) 方向へ直進
         if (enemy.type === 'air') {
-          enemy.x += enemy.speed * deltaMS * 0.08
-          const rightEdge = width / 2 + 200
-          if (enemy.x > rightEdge) {
+          const dx = 0 - enemy.x
+          const dy = 0 - enemy.y
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          if (dist <= 1) {
             state.enemies.splice(i, 1)
+          } else {
+            const norm = (enemy.speed * deltaMS * 0.05) / dist
+            enemy.x += dx * norm
+            enemy.y += dy * norm
           }
         }
         // takokong: player_house に向かって直進（x=0, y=0 つまり mapLayer 中心）
