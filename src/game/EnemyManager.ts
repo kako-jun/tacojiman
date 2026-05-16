@@ -62,6 +62,8 @@ interface SpawnContext {
   width: number
   height: number
   goalPanel: MapPanel | undefined
+  // waterGoal は makeContext 構築時に 1 回だけ計算しておく（N3: フレーム毎の二重走査を避ける）
+  waterGoal: { x: number; y: number } | null
 }
 
 function makeContext(state: GameState): SpawnContext {
@@ -70,13 +72,21 @@ function makeContext(state: GameState): SpawnContext {
   const rows = map[0]?.length ?? 0
   const width = cols * TILE_SIZE
   const height = rows * TILE_SIZE
+  // N2: goalPanel の検索は 1 spawnEnemies 呼び出しにつき 1 回だけ走る
+  // （ここでキャッシュし、以下の make*Enemy ヘルパは ctx.goalPanel を参照する）
+  const goalPanel = map.flat().find((p) => p.type === 'player_house')
+  // N3: waterGoal も同様に 1 回だけ計算してキャッシュする
+  const waterGoal = goalPanel
+    ? findWaterGoalPanel(map, { x: goalPanel.x, y: goalPanel.y })
+    : null
   return {
     map,
     width,
     height,
     offsetX: -width / 2,
     offsetY: -height / 2,
-    goalPanel: map.flat().find((p) => p.type === 'player_house'),
+    goalPanel,
+    waterGoal,
   }
 }
 
@@ -125,17 +135,19 @@ function makeGroundEnemy(ctx: SpawnContext): EnemyState | null {
 
 /**
  * 水タコのスポーン位置を返す。
- * 家からマンハッタン距離が遠い water/river（上位 30%）の中から、
- * waterGoal まで A* で到達可能なタイルをランダムに選ぶ（S1）。
+ * 家から遠い water/river（マンハッタン降順上位 30%）から複数候補を取り、
+ * waterGoal まで A* で到達可能なものをランダムに選ぶ（S1/N4）。
  * 到達可能な候補がなければ null（S2）。
- * 「river の終端 or マップ端の water からの出現」を、毎回ランダム化して再現する。
+ * 「river の終端 or マップ端の water からの出現」を、毎回複数候補からランダム化して再現する。
  */
 function makeWaterEnemy(
   ctx: SpawnContext,
-  rand: () => number = Math.random,
-  waterGoal: { x: number; y: number } | null = null
+  rand: () => number = Math.random
 ): EnemyState | null {
   if (!ctx.goalPanel) return null
+  const goal = ctx.waterGoal
+  if (goal === null) return null
+
   const cols = ctx.map.length
   const rows = ctx.map[0]?.length ?? 0
 
@@ -151,15 +163,6 @@ function makeWaterEnemy(
     }
   }
   if (all.length === 0) return null
-
-  // ゴール（家に最寄りの water/river パネル）が存在するか確認
-  const goal =
-    waterGoal ??
-    findWaterGoalPanel(ctx.map, {
-      x: ctx.goalPanel.x,
-      y: ctx.goalPanel.y,
-    })
-  if (goal === null) return null
 
   // マンハッタン降順上位 30% を候補にする（S1: 複数候補からランダム）
   all.sort((a, b) => b.d - a.d)
@@ -242,17 +245,21 @@ function makeUndergroundEnemy(
 
 function makeEnemyOfType(
   type: Exclude<EnemyType, 'takokong'>,
-  ctx: SpawnContext
+  ctx: SpawnContext,
+  rand: () => number
 ): EnemyState | null {
   switch (type) {
     case 'ground':
       return makeGroundEnemy(ctx)
     case 'water':
-      return makeWaterEnemy(ctx)
+      return makeWaterEnemy(ctx, rand)
     case 'air':
-      return makeAirEnemy(ctx)
+      return makeAirEnemy(ctx, rand)
     case 'underground':
-      return makeUndergroundEnemy(ctx)
+      return makeUndergroundEnemy(ctx, rand)
+    default:
+      // N1: 不明型は明示的に null（never ガード相当）
+      return null
   }
 }
 
@@ -264,14 +271,21 @@ function makeEnemyOfType(
  *   - initialEnemiesSpawned / initialEnemiesRemaining / initialEnemiesNextDelayMs
  *   - spawnIntervalMs / spawnRateUpgradeAccumMs
  *   - maxEnemies / maxEnemiesUpgradeAccumMs
+ *
+ * 第 3 引数 randomSource (S3): テスト容易性のため Math.random を差し替え可能にする。
+ * 省略時は Math.random。全敵生成関数に伝搬する。
  */
-export function spawnEnemies(state: GameState, deltaMS: number): EnemyState[] {
+export function spawnEnemies(
+  state: GameState,
+  deltaMS: number,
+  randomSource: () => number = Math.random
+): EnemyState[] {
   const result: EnemyState[] = []
   const ctx = makeContext(state)
   const map = ctx.map
 
+  // S5: 空マップ時も deltaMS<=0 と同様、state を一切触らず空配列を返す
   if (map.length === 0) {
-    state.spawnTimer = state.spawnTimer + deltaMS
     return result
   }
 
@@ -328,12 +342,14 @@ export function spawnEnemies(state: GameState, deltaMS: number): EnemyState[] {
   if (interval > 0) {
     const crossings =
       Math.floor(nextTimer / interval) - Math.floor(prevTimer / interval)
+    // N5: maxEnemies は通常敵の同時存在上限。takokong はボス枠で別カウント扱いなので除外する
+    const isCounted = (e: { type: EnemyType }) => e.type !== 'takokong'
     const currentEnemyCount =
-      state.enemies.length + result.length
+      state.enemies.filter(isCounted).length + result.filter(isCounted).length
     let spawnable = Math.max(0, state.maxEnemies - currentEnemyCount)
     for (let i = 0; i < crossings && spawnable > 0; i++) {
-      const type = selectRandomEnemyType()
-      const enemy = makeEnemyOfType(type, ctx)
+      const type = selectRandomEnemyType(randomSource())
+      const enemy = makeEnemyOfType(type, ctx, randomSource)
       if (enemy !== null) {
         result.push(enemy)
         spawnable--
