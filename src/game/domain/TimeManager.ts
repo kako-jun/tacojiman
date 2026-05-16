@@ -31,7 +31,8 @@ export function calculateGameTime(
   durationMs: number,
   startMinutes: number
 ): GameTime {
-  const ratio = durationMs > 0 ? Math.min(1, Math.max(0, elapsedMs / durationMs)) : 0
+  const ratio =
+    durationMs > 0 ? Math.min(1, Math.max(0, elapsedMs / durationMs)) : 0
   const gameMinutes = Math.floor(ratio * 30)
   const total = Math.max(0, Math.floor(startMinutes) + gameMinutes)
   return {

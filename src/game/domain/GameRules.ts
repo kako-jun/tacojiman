@@ -6,7 +6,10 @@
 import type { EnemyType } from '../../types/GameState'
 
 /** 敵タイプ → 出現重み（合計 1.0、takokong は対象外）。 */
-export const ENEMY_SPAWN_WEIGHTS: Record<Exclude<EnemyType, 'takokong'>, number> = {
+export const ENEMY_SPAWN_WEIGHTS: Record<
+  Exclude<EnemyType, 'takokong'>,
+  number
+> = {
   ground: 0.5,
   water: 0.25,
   air: 0.15,

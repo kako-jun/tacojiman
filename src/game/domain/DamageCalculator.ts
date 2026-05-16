@@ -40,7 +40,10 @@ export function checkCircularCollision(
  * 矩形当たり判定。AABB 包含。
  * rect は左上座標 (x, y) と幅・高 (w, h)。target が rect 内なら true。
  */
-export function checkRectangularCollision(rect: Rect, target: Position): boolean {
+export function checkRectangularCollision(
+  rect: Rect,
+  target: Position
+): boolean {
   return (
     target.x >= rect.x &&
     target.x <= rect.x + rect.w &&

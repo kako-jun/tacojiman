@@ -4,10 +4,7 @@ import type {
   ShakeState,
   ZoomState,
 } from '../game/CameraController'
-import {
-  calculateGameTime,
-  formatGameTime,
-} from '../game/domain/TimeManager'
+import { calculateGameTime, formatGameTime } from '../game/domain/TimeManager'
 import { createRotationConfig } from '../game/domain/GameRules'
 import type { RotationConfig } from '../game/domain/GameRules'
 

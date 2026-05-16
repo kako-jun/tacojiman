@@ -80,6 +80,15 @@ export class GameScene extends Container {
   private readonly uiLayer = new Container()
   private readonly mapGraphics = new Graphics()
   private readonly enemyGraphics = new Graphics()
+  // #44: 敵の残像トレイル用 Graphics（enemy より下に描く）
+  private readonly trailGraphics = new Graphics()
+  // 敵 ID → 最近の (x, y, recordedMs) のリング（最大 8 個）
+  private readonly trailHistory = new Map<
+    string,
+    Array<{ x: number; y: number; at: number }>
+  >()
+  // 直近のサンプル時刻
+  private lastTrailSampleMs = 0
   private readonly playerGraphics = new Graphics()
   private keyboard: KeyboardManager | null = null
   private takokongBgmStarted = false
@@ -167,7 +176,8 @@ export class GameScene extends Container {
     super()
     this.mapLayer.addChild(this.mapGraphics)
     // enemyLayer / playerLayer は mapLayer の子にして自動回転に追従させる
-    this.enemyLayer.addChild(this.enemyGraphics)
+    // #44: trailGraphics は enemyGraphics の下に描く
+    this.enemyLayer.addChild(this.trailGraphics, this.enemyGraphics)
     this.mapLayer.addChild(this.enemyLayer)
     this.playerLayer.addChild(this.playerGraphics)
     this.mapLayer.addChild(this.playerLayer)
@@ -235,6 +245,9 @@ export class GameScene extends Container {
     this.takokongHpBar.clear()
     this.takokongCountdownText.visible = false
     this.pauseOverlayText.visible = false
+    this.trailHistory.clear()
+    this.trailGraphics.clear()
+    this.lastTrailSampleMs = 0
 
     // window blur で強制ズームアウト（フォーカス喪失時）
     if (this.blurHandler === null) {
@@ -383,9 +396,7 @@ export class GameScene extends Container {
 
     // #41: ランダム方向・速度（2〜3 分/周）でマップ回転
     this.mapLayer.rotation +=
-      this.state.rotation.direction *
-      this.state.rotation.speed *
-      ticker.deltaMS
+      this.state.rotation.direction * this.state.rotation.speed * ticker.deltaMS
 
     // スポーン
     const map = this.state.map
@@ -695,6 +706,32 @@ export class GameScene extends Container {
   private drawEnemies(): void {
     const state = this.requireState()
     this.enemyGraphics.clear()
+    this.trailGraphics.clear()
+    // #44: 50ms ごとに各敵の位置をトレイル履歴に追加（最大 8 個保持）
+    if (this.nowMs - this.lastTrailSampleMs >= 50) {
+      this.lastTrailSampleMs = this.nowMs
+      const liveIds = new Set<string>()
+      for (const e of state.enemies) {
+        liveIds.add(e.id)
+        const list = this.trailHistory.get(e.id) ?? []
+        list.push({ x: e.x, y: e.y, at: this.nowMs })
+        while (list.length > 8) list.shift()
+        this.trailHistory.set(e.id, list)
+      }
+      // 既に消えた敵の履歴は破棄
+      for (const id of this.trailHistory.keys()) {
+        if (!liveIds.has(id)) this.trailHistory.delete(id)
+      }
+    }
+    // トレイル描画（古いほど薄く）
+    for (const list of this.trailHistory.values()) {
+      for (let i = 0; i < list.length; i++) {
+        const t = list[i]
+        const alpha = ((i + 1) / list.length) * 0.35
+        this.trailGraphics.circle(t.x, t.y, 6)
+        this.trailGraphics.fill({ color: 0xffffff, alpha })
+      }
+    }
     for (const enemy of state.enemies) {
       this.drawEnemy(enemy)
     }
@@ -717,8 +754,12 @@ export class GameScene extends Container {
       this.enemyGraphics.fill(color)
       this.enemyGraphics.stroke({ color: 0xffffff, width: 2 })
     } else if (enemy.type === 'air') {
-      // 三角形
-      const size = enemy.hp > 1 ? 14 : 11
+      // 三角形（#44: 家からの距離に応じた遠近スケール — 遠いほど小さい）
+      const baseSize = enemy.hp > 1 ? 14 : 11
+      const dist = Math.sqrt(x * x + y * y)
+      // 0px (家) で 1.4x、400px 以遠で 0.6x にクランプ
+      const scale = Math.max(0.6, Math.min(1.4, 1.4 - dist / 400))
+      const size = baseSize * scale
       this.enemyGraphics.poly([
         x,
         y - size,
@@ -1049,6 +1090,45 @@ export class GameScene extends Container {
     }
   }
 
+  /**
+   * #44: 敵が家に到達したときの共通処理。
+   * スコアロス点滅 + マップ中央（家）の点滅エフェクトを起こす。
+   */
+  private onEnemyReachedHome(enemy: EnemyState): void {
+    const state = this.requireState()
+    // スコアロス: 通常敵タイプの score 分を減算（マイナスは出さない）
+    // air は score=3, ground=1, water=2, underground=4, takokong=10
+    let loss: number
+    switch (enemy.type) {
+      case 'water':
+        loss = 2
+        break
+      case 'air':
+        loss = 3
+        break
+      case 'underground':
+        loss = 4
+        break
+      case 'takokong':
+        loss = 10
+        break
+      default:
+        loss = 1
+    }
+    state.score = Math.max(0, state.score - loss)
+    this.effectManager?.showScoreLoss(enemy.x, enemy.y, loss)
+    // 家（mapLayer の 0,0）を白く点滅
+    const flash = new Graphics()
+    this.effectLayer.addChild(flash)
+    flash.circle(0, 0, TILE_SIZE)
+    flash.fill({ color: 0xffffff, alpha: 0.7 })
+    gsap.to(flash, {
+      alpha: 0,
+      duration: 0.4,
+      onComplete: () => flash.destroy(),
+    })
+  }
+
   private advanceEnemies(deltaMS: number): void {
     const state = this.requireState()
     const map = state.map
@@ -1097,6 +1177,7 @@ export class GameScene extends Container {
           const dy = 0 - enemy.y
           const dist = Math.sqrt(dx * dx + dy * dy)
           if (dist <= 1) {
+            this.onEnemyReachedHome(enemy)
             state.enemies.splice(i, 1)
           } else {
             const norm = (enemy.speed * deltaMS * 0.05) / dist
@@ -1111,6 +1192,7 @@ export class GameScene extends Container {
           const dist = Math.sqrt(dx * dx + dy * dy)
           if (dist <= 1) {
             // player_house 到達 → 除去
+            this.onEnemyReachedHome(enemy)
             state.enemies.splice(i, 1)
           } else {
             const norm = (enemy.speed * deltaMS * 0.05) / dist
@@ -1124,6 +1206,7 @@ export class GameScene extends Container {
           const dy = 0 - enemy.y
           const dist = Math.sqrt(dx * dx + dy * dy)
           if (dist <= 1) {
+            this.onEnemyReachedHome(enemy)
             state.enemies.splice(i, 1)
           } else {
             const norm = (enemy.speed * deltaMS * 0.05) / dist
@@ -1223,6 +1306,14 @@ export class GameScene extends Container {
         score: result.earnedScore,
         combo: 1,
       })
+    }
+    // #44: 撃破数に応じた演出
+    const defeatedCount = result.defeatedEnemyIds.length
+    if (defeatedCount >= 2) {
+      this.effectManager?.showMultiHit(worldX, worldY, defeatedCount)
+    } else if (defeatedCount === 0 && result.damagedEnemyIds.length === 0) {
+      // 敵にかすりもしなかったタップは MISS 表示
+      this.effectManager?.showMiss(worldX, worldY)
     }
   }
 

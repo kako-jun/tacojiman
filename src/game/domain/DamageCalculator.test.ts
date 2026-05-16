@@ -17,14 +17,14 @@ describe('calculateDistance (#43)', () => {
 
 describe('checkCircularCollision (#43)', () => {
   it('境界（距離=radius）は hit', () => {
-    expect(
-      checkCircularCollision({ x: 0, y: 0 }, { x: 10, y: 0 }, 10)
-    ).toBe(true)
+    expect(checkCircularCollision({ x: 0, y: 0 }, { x: 10, y: 0 }, 10)).toBe(
+      true
+    )
   })
   it('範囲外は false', () => {
-    expect(
-      checkCircularCollision({ x: 0, y: 0 }, { x: 11, y: 0 }, 10)
-    ).toBe(false)
+    expect(checkCircularCollision({ x: 0, y: 0 }, { x: 11, y: 0 }, 10)).toBe(
+      false
+    )
   })
 })
 

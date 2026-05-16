@@ -16,9 +16,13 @@ describe('ENEMY_SPAWN_WEIGHTS (#43)', () => {
     expect(sum).toBeCloseTo(1.0, 5)
   })
   it('ground が最大重み', () => {
-    expect(ENEMY_SPAWN_WEIGHTS.ground).toBeGreaterThan(ENEMY_SPAWN_WEIGHTS.water)
+    expect(ENEMY_SPAWN_WEIGHTS.ground).toBeGreaterThan(
+      ENEMY_SPAWN_WEIGHTS.water
+    )
     expect(ENEMY_SPAWN_WEIGHTS.water).toBeGreaterThan(ENEMY_SPAWN_WEIGHTS.air)
-    expect(ENEMY_SPAWN_WEIGHTS.air).toBeGreaterThan(ENEMY_SPAWN_WEIGHTS.underground)
+    expect(ENEMY_SPAWN_WEIGHTS.air).toBeGreaterThan(
+      ENEMY_SPAWN_WEIGHTS.underground
+    )
   })
 })
 
