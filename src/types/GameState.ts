@@ -42,6 +42,57 @@ export type BombType =
 export type EnemyType = 'ground' | 'water' | 'air' | 'underground' | 'takokong'
 
 /**
+ * #38: マッディの地雷。発動位置に永続設置。
+ * トリガー半径内に敵が入ったら爆発し、半径内の敵にダメージを与えてから除去される。
+ */
+export interface MineState {
+  id: string
+  x: number
+  y: number
+  triggerRange: number
+  explosionRange: number
+  damage: number
+}
+
+/**
+ * #38: セントリーの自動砲台。5秒間持続して 1 秒ごとに射程内最近敵を撃つ。
+ */
+export interface SentryState {
+  id: string
+  x: number
+  y: number
+  remainingMs: number
+  fireCooldownMs: number
+  range: number
+  damage: number
+}
+
+/**
+ * #38: 分身の術の囮。プレイヤーから一定距離に 2 つ配置され、5 秒間敵を誘導する。
+ */
+export interface DecoyState {
+  id: string
+  x: number
+  y: number
+  remainingMs: number
+  lureRange: number
+}
+
+/**
+ * #38: ダインスレイブの多段ヒット。発動位置で 0.2 秒間隔で remainingHits 回ヒットする。
+ */
+export interface MultiHitBombState {
+  id: string
+  x: number
+  y: number
+  range: number
+  damage: number
+  remainingHits: number
+  nextHitInMs: number
+  hitIntervalMs: number
+}
+
+/**
  * タココング戦の専用ステート（#37）。
  * 通常敵と異なり、HP・バリア・撃破フラグなど戦闘専用の情報を持つ。
  * active=true の間は GameScene 側で「ズーム固定」「HP バー表示」「カウントダウン表示」
@@ -117,6 +168,11 @@ export interface GameState {
   bombRecoveryThresholds: number[]
   // タココング戦専用ステート（出現前は null）
   takokongState: TakokongState | null
+  // #38: ボム由来の仕掛けエンティティ
+  mines: MineState[]
+  sentries: SentryState[]
+  decoys: DecoyState[]
+  multiHitBombs: MultiHitBombState[]
 }
 
 // タココング HP（#37）
@@ -174,6 +230,105 @@ export function createInitialGameState(): GameState {
     maxEnemiesUpgradeAccumMs: 0,
     bombRecoveryThresholds: [60_000, 120_000],
     takokongState: null,
+    mines: [],
+    sentries: [],
+    decoys: [],
+    multiHitBombs: [],
+  }
+}
+
+// #38: 仕掛け系ボムのデフォルトパラメータ
+export const MINE_TRIGGER_RANGE = 30
+export const MINE_EXPLOSION_RANGE = 60
+export const MINE_DAMAGE = 1
+export const SENTRY_LIFETIME_MS = 5_000
+export const SENTRY_FIRE_INTERVAL_MS = 1_000
+export const SENTRY_RANGE = 100
+export const SENTRY_DAMAGE = 1
+export const DECOY_LIFETIME_MS = 5_000
+export const DECOY_LURE_RANGE = 120
+export const DECOY_DISTANCE = 60
+export const DAINSLEIF_HIT_INTERVAL_MS = 200
+export const DAINSLEIF_HIT_COUNT = 3
+export const DAINSLEIF_RANGE = 80
+export const DAINSLEIF_DAMAGE = 1
+export const PROTON_BEAM_WIDTH = 40
+export const PROTON_BEAM_LENGTH = 600
+export const PROTON_DAMAGE = 1
+
+/**
+ * #38: 地雷トリガー判定（ピュア関数）。
+ * 敵が地雷の triggerRange 内にあるなら true。
+ */
+export function triggerMineIfHit(mine: MineState, enemy: EnemyState): boolean {
+  const dx = enemy.x - mine.x
+  const dy = enemy.y - mine.y
+  const r2 = mine.triggerRange * mine.triggerRange
+  return dx * dx + dy * dy <= r2
+}
+
+/**
+ * #38: セントリー砲台が狙う敵を選ぶ（ピュア関数）。
+ * 射程内で最も近い敵を返す。なければ null。
+ */
+export function pickSentryTarget(
+  sentry: SentryState,
+  enemies: EnemyState[]
+): EnemyState | null {
+  let best: EnemyState | null = null
+  let bestDist2 = Infinity
+  const r2 = sentry.range * sentry.range
+  for (const e of enemies) {
+    const dx = e.x - sentry.x
+    const dy = e.y - sentry.y
+    const d2 = dx * dx + dy * dy
+    if (d2 > r2) continue
+    if (d2 < bestDist2) {
+      bestDist2 = d2
+      best = e
+    }
+  }
+  return best
+}
+
+/**
+ * #38: 分身が敵を誘導すべきか判定する（ピュア関数）。
+ * 敵が分身の lureRange 内にいるなら true。
+ */
+export function pickDecoyTarget(decoy: DecoyState, enemy: EnemyState): boolean {
+  const dx = enemy.x - decoy.x
+  const dy = enemy.y - decoy.y
+  const r2 = decoy.lureRange * decoy.lureRange
+  return dx * dx + dy * dy <= r2
+}
+
+/**
+ * #38: 多段ヒットボムを 1 フレーム分進める（ピュア関数）。
+ * nextHitInMs を deltaMS だけ減らし、0 以下になったら fired=true で 1 ヒット消費。
+ * remainingHits が 0 になったら remaining=null（除去対象）。
+ */
+export function tickMultiHitBomb(
+  bomb: MultiHitBombState,
+  deltaMS: number
+): { fired: boolean; remaining: MultiHitBombState | null } {
+  const nextIn = bomb.nextHitInMs - deltaMS
+  if (nextIn > 0) {
+    return {
+      fired: false,
+      remaining: { ...bomb, nextHitInMs: nextIn },
+    }
+  }
+  const remainingHits = bomb.remainingHits - 1
+  if (remainingHits <= 0) {
+    return { fired: true, remaining: null }
+  }
+  return {
+    fired: true,
+    remaining: {
+      ...bomb,
+      remainingHits,
+      nextHitInMs: bomb.hitIntervalMs,
+    },
   }
 }
 

@@ -12,14 +12,19 @@ import {
   getClockText,
   isHouseTapped,
   isTakokongActive,
+  pickDecoyTarget,
   pickRandomBomb,
+  pickSentryTarget,
+  tickMultiHitBomb,
   tickTakokongBarrier,
   tickTakokongCountdown,
+  triggerMineIfHit,
   tryBombRecovery,
   TILE_SIZE,
   VIEW_HEIGHT,
   VIEW_WIDTH,
   type BombType,
+  type DecoyState,
   type Direction,
   type EnemyState,
   type GameState,
@@ -33,7 +38,12 @@ import {
   ATTACK_RANGE,
   ATTACK_DAMAGE,
 } from '../game/EnemyManager'
-import { applyBombDamage } from '../game/BombJutsu'
+import {
+  applyBombDamage,
+  applyCircularDamage,
+  applyHitResults,
+  type BombEffect,
+} from '../game/BombJutsu'
 import {
   calcShakeOffset,
   getCurrentZoom,
@@ -404,6 +414,9 @@ export class GameScene extends Container {
     state.camera = updateZoom(state.camera, ticker.deltaMS)
     this.mapLayer.scale.set(state.camera.scale)
     this.mapLayer.pivot.set(state.camera.pivot.x, state.camera.pivot.y)
+
+    // #38: 仕掛け系（地雷・砲台・分身・多段ボム）を毎フレーム更新
+    this.tickBombEntities(ticker.deltaMS)
 
     this.advanceEnemies(ticker.deltaMS)
 
@@ -803,6 +816,173 @@ export class GameScene extends Container {
     }
   }
 
+  /**
+   * #38: 敵がアクティブな分身のうち最寄り（lureRange 内）を返す。
+   * 分身が無い・範囲外なら null。
+   */
+  private findLureDecoy(enemy: EnemyState): DecoyState | null {
+    const state = this.requireState()
+    let best: DecoyState | null = null
+    let bestDist2 = Infinity
+    for (const d of state.decoys) {
+      if (!pickDecoyTarget(d, enemy)) continue
+      const dx = enemy.x - d.x
+      const dy = enemy.y - d.y
+      const dist2 = dx * dx + dy * dy
+      if (dist2 < bestDist2) {
+        bestDist2 = dist2
+        best = d
+      }
+    }
+    return best
+  }
+
+  /**
+   * #38: 敵を decoy 方向へ 1 ステップ移動させる。
+   * 直進。decoy に到達したら何もしない（停止）。
+   */
+  private moveEnemyTowardDecoy(
+    enemy: EnemyState,
+    decoy: DecoyState,
+    deltaMS: number
+  ): void {
+    const dx = decoy.x - enemy.x
+    const dy = decoy.y - enemy.y
+    const dist = Math.sqrt(dx * dx + dy * dy)
+    if (dist <= 1) return
+    const norm = (enemy.speed * deltaMS * 0.05) / dist
+    enemy.x += dx * norm
+    enemy.y += dy * norm
+  }
+
+  /**
+   * #38: 仕掛け系ボムを毎フレーム進める。
+   * - mines: 敵が triggerRange 内に入ったら爆発し範囲内全敵にダメージ
+   * - sentries: 残時間消化、cooldown 経過で射程内最近敵に弾を撃つ
+   * - decoys: 残時間消化のみ（敵の誘導は advanceEnemies で処理）
+   * - multiHitBombs: tickMultiHitBomb で 1 段ずつ消化
+   * 撃破ボーナス（スコア）も加算する。
+   */
+  private tickBombEntities(deltaMS: number): void {
+    const state = this.requireState()
+
+    // ── mines: トリガー判定 → 爆発 → 範囲ダメージ
+    for (let i = state.mines.length - 1; i >= 0; i--) {
+      const mine = state.mines[i]
+      const triggered = state.enemies.some((e) => triggerMineIfHit(mine, e))
+      if (!triggered) continue
+      const effect: BombEffect = {
+        type: 'muddy',
+        hitResults: new Map(),
+        takokongBonus: 0,
+      }
+      applyCircularDamage(
+        state,
+        effect,
+        mine.x,
+        mine.y,
+        mine.explosionRange,
+        mine.damage
+      )
+      const earned = effect.hitResults.size
+      applyHitResults(state, effect)
+      const total = earned + effect.takokongBonus
+      if (total > 0) {
+        state.score += total
+        this.events.emit('score-gain', {
+          x: mine.x,
+          y: mine.y,
+          score: total,
+          combo: 1,
+        })
+      }
+      state.mines.splice(i, 1)
+    }
+
+    // ── sentries: 残時間消化 + cooldown 経過で射撃
+    for (let i = state.sentries.length - 1; i >= 0; i--) {
+      const sentry = state.sentries[i]
+      sentry.remainingMs -= deltaMS
+      sentry.fireCooldownMs -= deltaMS
+      if (sentry.fireCooldownMs <= 0) {
+        const target = pickSentryTarget(sentry, state.enemies)
+        if (target !== null) {
+          const effect: BombEffect = {
+            type: 'sentry',
+            hitResults: new Map(),
+            takokongBonus: 0,
+          }
+          effect.hitResults.set(
+            target.id,
+            Math.max(0, target.hp - sentry.damage)
+          )
+          applyHitResults(state, effect)
+          const total = effect.hitResults.size + effect.takokongBonus
+          if (total > 0) {
+            state.score += total
+            this.events.emit('score-gain', {
+              x: target.x,
+              y: target.y,
+              score: total,
+              combo: 1,
+            })
+          }
+        }
+        sentry.fireCooldownMs = 1_000
+      }
+      if (sentry.remainingMs <= 0) {
+        state.sentries.splice(i, 1)
+      }
+    }
+
+    // ── decoys: 残時間消化のみ
+    for (let i = state.decoys.length - 1; i >= 0; i--) {
+      const decoy = state.decoys[i]
+      decoy.remainingMs -= deltaMS
+      if (decoy.remainingMs <= 0) {
+        state.decoys.splice(i, 1)
+      }
+    }
+
+    // ── multiHitBombs: 1 段ずつ消化
+    for (let i = state.multiHitBombs.length - 1; i >= 0; i--) {
+      const bomb = state.multiHitBombs[i]
+      const r = tickMultiHitBomb(bomb, deltaMS)
+      if (r.fired) {
+        const effect: BombEffect = {
+          type: 'dainsleif',
+          hitResults: new Map(),
+          takokongBonus: 0,
+        }
+        applyCircularDamage(
+          state,
+          effect,
+          bomb.x,
+          bomb.y,
+          bomb.range,
+          bomb.damage
+        )
+        const earned = effect.hitResults.size
+        applyHitResults(state, effect)
+        const total = earned + effect.takokongBonus
+        if (total > 0) {
+          state.score += total
+          this.events.emit('score-gain', {
+            x: bomb.x,
+            y: bomb.y,
+            score: total,
+            combo: 1,
+          })
+        }
+      }
+      if (r.remaining === null) {
+        state.multiHitBombs.splice(i, 1)
+      } else {
+        state.multiHitBombs[i] = r.remaining
+      }
+    }
+  }
+
   private advanceEnemies(deltaMS: number): void {
     const state = this.requireState()
     const map = state.map
@@ -813,6 +993,12 @@ export class GameScene extends Container {
 
     for (let i = state.enemies.length - 1; i >= 0; i--) {
       const enemy = state.enemies[i]
+      // #38: 分身が範囲内にいる敵は分身へ向かう（route を一時オーバーライド）
+      const lure = this.findLureDecoy(enemy)
+      if (lure !== null) {
+        this.moveEnemyTowardDecoy(enemy, lure, deltaMS)
+        continue
+      }
       if (enemy.route.length > 0) {
         enemy.routeProgress = Math.min(
           1,

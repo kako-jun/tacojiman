@@ -57,6 +57,10 @@ function makeMinimalState(overrides: Partial<GameState> = {}): GameState {
     maxEnemiesUpgradeAccumMs: 0,
     bombRecoveryThresholds: [60_000, 120_000],
     takokongState: null,
+    mines: [],
+    sentries: [],
+    decoys: [],
+    multiHitBombs: [],
     ...overrides,
   }
 }
