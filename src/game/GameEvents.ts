@@ -1,10 +1,10 @@
 // ゲームイベントの型定義（Phaser 依存なし）
 
 export interface ScoreGainEvent {
-  x: number        // mapLayer ローカル座標
+  x: number // mapLayer ローカル座標
   y: number
-  score: number    // 獲得スコア
-  combo: number    // 連続ボーナス倍率
+  score: number // 獲得スコア
+  combo: number // 連続ボーナス倍率
 }
 
 export interface EnemyHitEvent {
@@ -14,8 +14,8 @@ export interface EnemyHitEvent {
 }
 
 export interface BombActivatedEvent {
-  type: string  // BombType と同じ値
-  x: number     // 発動地点 (mapLayer ローカル)
+  type: string // BombType と同じ値
+  x: number // 発動地点 (mapLayer ローカル)
   y: number
 }
 
@@ -61,7 +61,7 @@ export class GameEventEmitter {
   }
 
   emit<K extends GameEventName>(event: K, payload: GameEventMap[K]): void {
-    this.handlers.get(event)?.forEach(h => h(payload))
+    this.handlers.get(event)?.forEach((h) => h(payload))
   }
 
   removeAllListeners<K extends GameEventName>(event: K): void {

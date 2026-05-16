@@ -1,13 +1,23 @@
-import { describe, expect, it } from 'vitest'
-import { ENEMY_SPECS, spawnEnemies } from './EnemyManager'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  ENEMY_SPECS,
+  selectRandomEnemyType,
+  spawnEnemies,
+} from './EnemyManager'
 import { createInitialGameState, TILE_SIZE } from '../types/GameState'
 import type { GameState, MapPanel } from '../types/GameState'
+import { findWaterGoalPanel, findWaterPath, generateMap } from './map'
 
 // テスト用の最小 GameState を手組みするヘルパー
 function makeMinimalState(overrides: Partial<GameState> = {}): GameState {
   const defaultMap: MapPanel[][] = [
     [
-      { x: 0, y: 0, type: 'path', connections: { north: false, south: true, east: false, west: false } },
+      {
+        x: 0,
+        y: 0,
+        type: 'path',
+        connections: { north: false, south: true, east: false, west: false },
+      },
     ],
   ]
   return {
@@ -29,33 +39,27 @@ function makeMinimalState(overrides: Partial<GameState> = {}): GameState {
     shakeState: { remainingMs: 0, intensity: 0 },
     zoomState: null,
     playerHp: 3,
+    initialEnemiesSpawned: true,
+    initialEnemiesRemaining: 0,
+    initialEnemiesNextDelayMs: 0,
+    spawnIntervalMs: 500,
+    spawnRateUpgradeAccumMs: 0,
+    maxEnemies: 40,
+    maxEnemiesUpgradeAccumMs: 0,
     ...overrides,
   }
-}
-
-// path x=0 が存在しないマップ（全セル path だが x=1 から始まる）
-function makeNoPathX0Map(): MapPanel[][] {
-  return [
-    [
-      { x: 1, y: 0, type: 'path', connections: { north: false, south: false, east: false, west: false } },
-    ],
-  ]
 }
 
 // rice_field が存在しないマップ（全セル path）
 function makeAllPathMap(): MapPanel[][] {
   return [
     [
-      { x: 0, y: 0, type: 'path', connections: { north: false, south: false, east: false, west: false } },
-    ],
-  ]
-}
-
-// water パネルが y=0 に存在するマップ
-function makeWaterY0Map(): MapPanel[][] {
-  return [
-    [
-      { x: 0, y: 0, type: 'water', connections: { north: false, south: false, east: false, west: false } },
+      {
+        x: 0,
+        y: 0,
+        type: 'path',
+        connections: { north: false, south: false, east: false, west: false },
+      },
     ],
   ]
 }
@@ -85,22 +89,149 @@ describe('ENEMY_SPECS', () => {
   })
 })
 
-describe('spawnEnemies', () => {
-  it('elapsedMs=0 では空配列を返す（まだスポーンタイミングではない）', () => {
-    const state = createInitialGameState()
-    state.phase = 'playing'
-    const result = spawnEnemies(state, 0)
-    expect(result).toEqual([])
-  })
+// ─── 初期 3 体スポーン ─────────────────────────────────────────────
 
-  it('spawnTimer が 30000 に達したとき ground が1体スポーンする', () => {
+describe('spawnEnemies — 初期 3 体スポーン', () => {
+  it('phase=playing で最初の呼び出し直後に地上タコ 1 体が即時スポーンする', () => {
     const state = createInitialGameState()
     state.phase = 'playing'
-    // spawnTimer を 29999 に設定してから delta=1 で30000に到達させる
-    state.spawnTimer = 29_999
     const result = spawnEnemies(state, 1)
     const grounds = result.filter((e) => e.type === 'ground')
     expect(grounds.length).toBeGreaterThanOrEqual(1)
+    expect(state.initialEnemiesRemaining).toBeLessThanOrEqual(2)
+  })
+
+  it('合計 200ms 経過時点で残り 2 体もスポーンしている（合計 3 体）', () => {
+    const state = createInitialGameState()
+    state.phase = 'playing'
+    // 1 体目（即時）
+    const first = spawnEnemies(state, 1)
+    // 200ms 経過 → 2 体目
+    const second = spawnEnemies(state, 200)
+    // さらに 200ms 経過 → 3 体目
+    const third = spawnEnemies(state, 200)
+    const totalGround = [...first, ...second, ...third].filter(
+      (e) => e.type === 'ground'
+    ).length
+    expect(totalGround).toBeGreaterThanOrEqual(3)
+    expect(state.initialEnemiesSpawned).toBe(true)
+    expect(state.initialEnemiesRemaining).toBe(0)
+  })
+
+  it('initialEnemiesSpawned=true に達したら初期スポーン分は出ない', () => {
+    const state = makeMinimalState({
+      initialEnemiesSpawned: true,
+      initialEnemiesRemaining: 0,
+    })
+    // 200ms × 5 経過させても初期 3 体分は再度出てこない
+    spawnEnemies(state, 200)
+    expect(state.initialEnemiesSpawned).toBe(true)
+  })
+})
+
+// ─── selectRandomEnemyType（重み付き選択） ────────────────────
+
+describe('selectRandomEnemyType', () => {
+  it('rand=0 のとき ground を返す（cumulative 0.5）', () => {
+    expect(selectRandomEnemyType(0)).toBe('ground')
+  })
+
+  it('rand=0.5 のとき ground を返す（境界、ground=0.5）', () => {
+    expect(selectRandomEnemyType(0.5)).toBe('ground')
+  })
+
+  it('rand=0.6 のとき water を返す（cumulative 0.75）', () => {
+    expect(selectRandomEnemyType(0.6)).toBe('water')
+  })
+
+  it('rand=0.8 のとき air を返す（cumulative 0.9）', () => {
+    expect(selectRandomEnemyType(0.8)).toBe('air')
+  })
+
+  it('rand=0.95 のとき underground を返す（cumulative 1.0）', () => {
+    expect(selectRandomEnemyType(0.95)).toBe('underground')
+  })
+
+  it('rand=1.0 のとき underground を返す（cumulative 1.0 で境界）', () => {
+    expect(selectRandomEnemyType(1.0)).toBe('underground')
+  })
+
+  it('takokong は重み付き選択の対象外', () => {
+    // 全範囲で takokong は返らない
+    for (let r = 0; r <= 1; r += 0.05) {
+      expect(selectRandomEnemyType(r)).not.toBe('takokong')
+    }
+  })
+})
+
+// ─── 動的スポーン間隔・最大敵数 ─────────────────────────────────
+
+describe('spawnEnemies — 動的スポーン間隔', () => {
+  it('15 秒経過で spawnIntervalMs が ×0.8 になる（500→400）', () => {
+    const state = makeMinimalState({ spawnIntervalMs: 500 })
+    spawnEnemies(state, 15_000)
+    expect(state.spawnIntervalMs).toBeCloseTo(400, 5)
+  })
+
+  it('30 秒経過で spawnIntervalMs が 500 → 400 → 320 になる', () => {
+    const state = makeMinimalState({ spawnIntervalMs: 500 })
+    spawnEnemies(state, 30_000)
+    expect(state.spawnIntervalMs).toBeCloseTo(320, 5)
+  })
+
+  it('spawnIntervalMs は下限 200ms を下回らない', () => {
+    const state = makeMinimalState({ spawnIntervalMs: 500 })
+    // 長時間経過させて極小値にする
+    spawnEnemies(state, 600_000)
+    expect(state.spawnIntervalMs).toBeGreaterThanOrEqual(200)
+  })
+})
+
+describe('spawnEnemies — 動的最大敵数', () => {
+  it('15 秒経過で maxEnemies が 40 → 45 になる', () => {
+    const state = makeMinimalState({ maxEnemies: 40 })
+    spawnEnemies(state, 15_000)
+    expect(state.maxEnemies).toBe(45)
+  })
+
+  it('maxEnemies は上限 70 を超えない', () => {
+    const state = makeMinimalState({ maxEnemies: 40 })
+    spawnEnemies(state, 600_000)
+    expect(state.maxEnemies).toBe(70)
+  })
+
+  it('現在の敵数が maxEnemies に達しているときは新規スポーンしない', () => {
+    // 既に 40 体いる状態で spawnInterval を跨いでもスポーンしない
+    const map: MapPanel[][] = [
+      [
+        {
+          x: 0,
+          y: 0,
+          type: 'path',
+          connections: { north: false, south: false, east: false, west: false },
+        },
+      ],
+    ]
+    const fakeEnemies = Array.from({ length: 40 }, (_, i) => ({
+      id: `ground-${i}`,
+      type: 'ground' as const,
+      hp: 2,
+      speed: 0.4,
+      x: 0,
+      y: 0,
+      routeProgress: 0,
+      route: [],
+    }))
+    const state = makeMinimalState({
+      map,
+      enemies: fakeEnemies,
+      spawnIntervalMs: 500,
+      maxEnemies: 40,
+    })
+    const result = spawnEnemies(state, 500)
+    // takokong 以外はスポーンしない（敵数上限）
+    const nonTakokong = result.filter((e) => e.type !== 'takokong')
+    expect(nonTakokong).toHaveLength(0)
   })
 })
 
@@ -112,23 +243,6 @@ describe('spawnEnemies — 境界値・異常系', () => {
     const result = spawnEnemies(state, 0)
     expect(result).toEqual([])
     expect(state.spawnTimer).toBe(0)
-  })
-
-  it('タイマーが閾値ちょうどの状態で delta=0 ではスポーンしない', () => {
-    const state = makeMinimalState({ spawnTimer: 30_000 })
-    const result = spawnEnemies(state, 0)
-    const grounds = result.filter((e) => e.type === 'ground')
-    expect(grounds).toHaveLength(0)
-  })
-
-  it('delta が 60001（2区間分超）でも ground は1体だけスポーンする（条件は1回しか評価されない）', () => {
-    // prevTimer=0, nextTimer=60001 → floor(0/30000)=0 < floor(60001/30000)=2 だが if 分岐は1回
-    const state = createInitialGameState()
-    state.phase = 'playing'
-    state.spawnTimer = 0
-    const result = spawnEnemies(state, 60_001)
-    const grounds = result.filter((e) => e.type === 'ground')
-    expect(grounds).toHaveLength(1)
   })
 })
 
@@ -143,7 +257,10 @@ describe('spawnEnemies — 状態遷移', () => {
   })
 
   it('takokong スポーン後に state.takokongSpawned が true に書き換えられている', () => {
-    const state = makeMinimalState({ takokongSpawned: false, elapsedMs: 169_999 })
+    const state = makeMinimalState({
+      takokongSpawned: false,
+      elapsedMs: 169_999,
+    })
     spawnEnemies(state, 1)
     expect(state.takokongSpawned).toBe(true)
   })
@@ -160,100 +277,26 @@ describe('spawnEnemies — 状態遷移', () => {
 // ─── マップが空の場合（クラッシュしない確認） ─────────────────────
 
 describe('spawnEnemies — マップ条件が満たされないときクラッシュしない', () => {
-  it('path x=0 のパネルが存在しないマップで ground がスポーンしない', () => {
-    const state = makeMinimalState({
-      map: makeNoPathX0Map(),
-      spawnTimer: 29_999,
-    })
-    const result = spawnEnemies(state, 1)
-    const grounds = result.filter((e) => e.type === 'ground')
-    expect(grounds).toHaveLength(0)
-  })
-
-  it('rice_field パネルが存在しないマップで underground がスポーンしない', () => {
+  it('rice_field パネルが存在しないマップで spawnEnemies がクラッシュしない', () => {
     const state = makeMinimalState({
       map: makeAllPathMap(),
-      spawnTimer: 29_999,
+      spawnTimer: 0,
     })
-    const result = spawnEnemies(state, 1)
-    const undergrounds = result.filter((e) => e.type === 'underground')
-    expect(undergrounds).toHaveLength(0)
-  })
-})
-
-// ─── water スポーン ───────────────────────────────────────────────
-
-describe('spawnEnemies — water スポーン', () => {
-  it('water パネル(y=0)が存在するマップで water がスポーンする', () => {
-    const state = makeMinimalState({
-      map: makeWaterY0Map(),
-      spawnTimer: 29_999,
-    })
-    const result = spawnEnemies(state, 1)
-    const waters = result.filter((e) => e.type === 'water')
-    expect(waters.length).toBeGreaterThanOrEqual(1)
+    expect(() => spawnEnemies(state, 1000)).not.toThrow()
   })
 
-  it('water パネルが y=0 でない場合は water がスポーンしない', () => {
-    // y=1 の water パネル（フィルタ条件 p.y === 0 を満たさない）
-    const mapWithWaterY1: MapPanel[][] = [
-      [
-        { x: 0, y: 0, type: 'path', connections: { north: false, south: false, east: false, west: false } },
-        { x: 0, y: 1, type: 'water', connections: { north: false, south: false, east: false, west: false } },
-      ],
-    ]
-    const state = makeMinimalState({
-      map: mapWithWaterY1,
-      spawnTimer: 29_999,
-    })
-    const result = spawnEnemies(state, 1)
-    const waters = result.filter((e) => e.type === 'water')
-    expect(waters).toHaveLength(0)
-  })
-})
-
-// ─── スポーン位置 ────────────────────────────────────────────────
-
-describe('spawnEnemies — スポーン位置', () => {
-  it('ground がスポーンした敵の x 座標が offsetX 付近（マップ端 x=0 列）である', () => {
-    const state = createInitialGameState()
-    state.phase = 'playing'
-    state.spawnTimer = 29_999
-    const result = spawnEnemies(state, 1)
-    const grounds = result.filter((e) => e.type === 'ground')
-    expect(grounds.length).toBeGreaterThanOrEqual(1)
-    // x=0 のパネル → ローカル座標 = 0 * TILE_SIZE + TILE_SIZE/2 + offsetX = offsetX + TILE_SIZE/2
-    // cols=19, offsetX = -(19 * TILE_SIZE) / 2
-    const cols = 19
-    const offsetX = -(cols * TILE_SIZE) / 2
-    const expectedX = 0 * TILE_SIZE + TILE_SIZE / 2 + offsetX
-    for (const g of grounds) {
-      expect(g.x).toBeCloseTo(expectedX, 0)
-    }
-  })
-
-  it('air がスポーンした敵の x が offsetX - 200 付近である', () => {
-    const state = createInitialGameState()
-    state.phase = 'playing'
-    state.spawnTimer = 44_999
-    const result = spawnEnemies(state, 1)
-    const airs = result.filter((e) => e.type === 'air')
-    expect(airs.length).toBeGreaterThanOrEqual(1)
-    const cols = 19
-    const offsetX = -(cols * TILE_SIZE) / 2
-    for (const a of airs) {
-      expect(a.x).toBeCloseTo(offsetX - 200, 0)
-    }
+  it('空マップでも spawnEnemies がクラッシュしない', () => {
+    const state = makeMinimalState({ map: [] as MapPanel[][] })
+    expect(() => spawnEnemies(state, 1000)).not.toThrow()
   })
 })
 
 // ─── ID フォーマット ─────────────────────────────────────────────
 
 describe('spawnEnemies — ID フォーマット', () => {
-  it('ground がスポーンした敵の id が "ground-" で始まる', () => {
+  it('初期スポーンの ground 敵の id が "ground-" で始まる', () => {
     const state = createInitialGameState()
     state.phase = 'playing'
-    state.spawnTimer = 29_999
     const result = spawnEnemies(state, 1)
     const grounds = result.filter((e) => e.type === 'ground')
     expect(grounds.length).toBeGreaterThanOrEqual(1)
@@ -263,10 +306,434 @@ describe('spawnEnemies — ID フォーマット', () => {
   })
 
   it('takokong がスポーンした敵の id が "takokong-" で始まる', () => {
-    const state = makeMinimalState({ takokongSpawned: false, elapsedMs: 170_000 })
-    const result = spawnEnemies(state, 0)
+    const state = makeMinimalState({
+      takokongSpawned: false,
+      elapsedMs: 170_000,
+    })
+    const result = spawnEnemies(state, 1)
     const takokongs = result.filter((e) => e.type === 'takokong')
     expect(takokongs.length).toBe(1)
     expect(takokongs[0].id.startsWith('takokong-')).toBe(true)
+  })
+})
+
+// ─── スポーン位置 ────────────────────────────────────────────────
+
+describe('spawnEnemies — スポーン位置', () => {
+  it('初期 ground スポーンの位置がマップの端の path タイル付近である（centerY 列 y=12, x=0）', () => {
+    const state = createInitialGameState()
+    state.phase = 'playing'
+    const result = spawnEnemies(state, 1)
+    const grounds = result.filter((e) => e.type === 'ground')
+    expect(grounds.length).toBeGreaterThanOrEqual(1)
+    // generateMap(19, 25): centerX=9, centerY=12。x=0, y=12 は path で端からの距離が最小
+    const cols = 19
+    const rows = 25
+    const offsetX = -(cols * TILE_SIZE) / 2
+    const offsetY = -(rows * TILE_SIZE) / 2
+    const expectedX = 0 * TILE_SIZE + TILE_SIZE / 2 + offsetX
+    const expectedY = 12 * TILE_SIZE + TILE_SIZE / 2 + offsetY
+    for (const g of grounds) {
+      expect(g.x).toBeCloseTo(expectedX, 0)
+      expect(g.y).toBeCloseTo(expectedY, 0)
+    }
+  })
+})
+
+// ─── 観点1: 重み付き選択の確率分布 ────────────────────────────────
+
+describe('selectRandomEnemyType — 確率分布', () => {
+  it('10000 サンプリングで 0.5/0.25/0.15/0.1 に ±5% の範囲で収束する', () => {
+    const counts: Record<string, number> = {
+      ground: 0,
+      water: 0,
+      air: 0,
+      underground: 0,
+    }
+    const N = 10_000
+    for (let i = 0; i < N; i++) {
+      const type = selectRandomEnemyType(Math.random())
+      counts[type] += 1
+    }
+    expect(counts.ground / N).toBeGreaterThan(0.45)
+    expect(counts.ground / N).toBeLessThan(0.55)
+    expect(counts.water / N).toBeGreaterThan(0.2)
+    expect(counts.water / N).toBeLessThan(0.3)
+    expect(counts.air / N).toBeGreaterThan(0.1)
+    expect(counts.air / N).toBeLessThan(0.2)
+    expect(counts.underground / N).toBeGreaterThan(0.05)
+    expect(counts.underground / N).toBeLessThan(0.15)
+  })
+})
+
+// ─── 観点2: spawnIntervalMs 境界値 ────────────────────────────────
+
+describe('spawnEnemies — spawnIntervalMs 境界値', () => {
+  it('14999ms 経過では 500 維持、15000ms ちょうどで 400 になる（15s 境界）', () => {
+    const stateA = makeMinimalState({ spawnIntervalMs: 500 })
+    spawnEnemies(stateA, 14_999)
+    expect(stateA.spawnIntervalMs).toBe(500)
+
+    const stateB = makeMinimalState({ spawnIntervalMs: 500 })
+    spawnEnemies(stateB, 15_000)
+    expect(stateB.spawnIntervalMs).toBeCloseTo(400, 5)
+  })
+})
+
+// ─── 観点3-5: マップ異常系（player_house なし / water なし / rice_field なし） ──
+
+describe('spawnEnemies — マップ異常系', () => {
+  it('player_house が無いマップでも spawnEnemies がクラッシュしない（ground は返らない）', () => {
+    // 全セル path、player_house なし
+    const map: MapPanel[][] = [
+      [
+        {
+          x: 0,
+          y: 0,
+          type: 'path',
+          connections: { north: false, south: false, east: false, west: false },
+        },
+      ],
+    ]
+    const state = makeMinimalState({
+      map,
+      initialEnemiesSpawned: false,
+      initialEnemiesRemaining: 3,
+      initialEnemiesNextDelayMs: 0,
+    })
+    let result: ReturnType<typeof spawnEnemies> = []
+    expect(() => {
+      result = spawnEnemies(state, 1000)
+    }).not.toThrow()
+    // player_house が無いので ground は出ない（makeGroundEnemy が null を返す）
+    expect(result.filter((e) => e.type === 'ground')).toHaveLength(0)
+  })
+
+  it('water/river が無いマップで water を選んでも enemy なし & state が健全', () => {
+    // player_house あり、water/river なし
+    const map: MapPanel[][] = [
+      [
+        {
+          x: 0,
+          y: 0,
+          type: 'player_house',
+          connections: { north: false, south: false, east: false, west: false },
+        },
+      ],
+    ]
+    const state = makeMinimalState({
+      map,
+      enemies: [],
+      maxEnemies: 40,
+      spawnIntervalMs: 500,
+      // 通常スポーンを跨がせる
+      spawnTimer: 0,
+    })
+    // Math.random を rand=0.6 に固定 → water が選ばれる
+    const randSpy = vi.spyOn(Math, 'random').mockReturnValue(0.6)
+    try {
+      const result = spawnEnemies(state, 500)
+      // water は出ない（makeWaterEnemy が null を返す）
+      expect(result.filter((e) => e.type === 'water')).toHaveLength(0)
+      // state は壊れていない
+      expect(state.spawnTimer).toBe(500)
+      expect(Array.isArray(state.enemies)).toBe(true)
+    } finally {
+      randSpy.mockRestore()
+    }
+  })
+
+  it('rice_field が無いマップで underground を選んでも enemy なし', () => {
+    // player_house あり、rice_field なし
+    const map: MapPanel[][] = [
+      [
+        {
+          x: 0,
+          y: 0,
+          type: 'player_house',
+          connections: { north: false, south: false, east: false, west: false },
+        },
+      ],
+    ]
+    const state = makeMinimalState({
+      map,
+      spawnIntervalMs: 500,
+      spawnTimer: 0,
+    })
+    // rand=0.95 → underground
+    const randSpy = vi.spyOn(Math, 'random').mockReturnValue(0.95)
+    try {
+      const result = spawnEnemies(state, 500)
+      expect(result.filter((e) => e.type === 'underground')).toHaveLength(0)
+    } finally {
+      randSpy.mockRestore()
+    }
+  })
+})
+
+// ─── 観点6: バグ修正テスト（path 無しマップで initialEnemiesRemaining が減らない） ──
+
+describe('spawnEnemies — 初期 3 体スポーンのバグ修正凍結', () => {
+  it('path タイル無しマップで初期 3 体スポーン要求しても initialEnemiesRemaining が減らない', () => {
+    // player_house のみ、path タイルなし（端 path が見つからない）
+    const map: MapPanel[][] = [
+      [
+        {
+          x: 0,
+          y: 0,
+          type: 'player_house',
+          connections: { north: false, south: false, east: false, west: false },
+        },
+      ],
+    ]
+    const state = makeMinimalState({
+      map,
+      initialEnemiesSpawned: false,
+      initialEnemiesRemaining: 3,
+      initialEnemiesNextDelayMs: 0,
+    })
+    const result = spawnEnemies(state, 1)
+    // 1 体も出ない
+    expect(result.filter((e) => e.type === 'ground')).toHaveLength(0)
+    // remaining は減っていない
+    expect(state.initialEnemiesRemaining).toBe(3)
+    expect(state.initialEnemiesSpawned).toBe(false)
+  })
+})
+
+// ─── 観点7-8: 初期スポーンと通常スポーンの同時発火 ───────────────
+
+describe('spawnEnemies — 初期 × 通常スポーンの同時発火', () => {
+  it('createInitialGameState + spawnEnemies(state, 500) で初期 1 体 + 通常 1 体（合計 2 体）', () => {
+    // S4: 初期 3 体は「毎フレーム最大 1 体」仕様（legacy delayedCall 準拠）。
+    // 単一フレーム deltaMS=500 では初期 1 体のみ。
+    // spawnIntervalMs=500 で crossings=1 → 通常 1 体。合計 2 体。
+    const state = createInitialGameState()
+    state.phase = 'playing'
+    const result = spawnEnemies(state, 500)
+    // まだ初期 3 体は出し切れていない
+    expect(state.initialEnemiesSpawned).toBe(false)
+    expect(state.initialEnemiesRemaining).toBe(2)
+    expect(result).toHaveLength(2)
+    const grounds = result.filter((e) => e.type === 'ground')
+    // 初期 ground が必ず 1 体、通常が ground を引いた場合は 2 体
+    expect(grounds.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('createInitialGameState + spawnEnemies(state, 1000) で初期 1 体 + 通常 2 体（合計 3 体）', () => {
+    // S4: 初期 3 体は毎フレーム 1 体なので、単一呼び出しでは 1 体だけ。
+    // spawnIntervalMs=500、deltaMS=1000 で crossings=2 → 通常 2 体。合計 3 体。
+    const state = createInitialGameState()
+    state.phase = 'playing'
+    const result = spawnEnemies(state, 1000)
+    expect(result).toHaveLength(3)
+    // 初期 1 体しか出ていないので未完了
+    expect(state.initialEnemiesSpawned).toBe(false)
+    expect(state.initialEnemiesRemaining).toBe(2)
+  })
+})
+
+// ─── 観点9: 通常スポーンと takokong の同時発火 ───────────────────
+
+describe('spawnEnemies — 通常 × takokong 同時発火', () => {
+  it('elapsedMs=169000 + deltaMS=2000 で takokong と通常スポーンが同フレームで返る', () => {
+    // 通常スポーンが成立するように generateMap のフルマップを使う
+    const state = createInitialGameState()
+    state.phase = 'playing'
+    state.initialEnemiesSpawned = true
+    state.initialEnemiesRemaining = 0
+    state.elapsedMs = 169_000
+    state.spawnTimer = 0
+    state.spawnIntervalMs = 500
+    state.takokongSpawned = false
+    const result = spawnEnemies(state, 2000)
+    const takokongs = result.filter((e) => e.type === 'takokong')
+    const nonTakokongs = result.filter((e) => e.type !== 'takokong')
+    expect(takokongs).toHaveLength(1)
+    // spawnTimer 0 → 2000、interval 500 で crossings=4
+    expect(nonTakokongs.length).toBeGreaterThanOrEqual(1)
+    expect(state.takokongSpawned).toBe(true)
+  })
+})
+
+// ─── 観点10: 二重実行整合（呼び出し回数で挙動が変わらない） ─────
+
+describe('spawnEnemies — 呼び出し回数による不変性', () => {
+  it('spawnEnemies(state, 250)×2 と spawnEnemies(state, 500)×1 の通常スポーン回数が一致する', () => {
+    // 通常スポーン回数のみ比較したいので initialEnemiesSpawned=true で始める。
+    // 通常スポーンの種類による成否ブレを避けるため Math.random を固定する。
+    const randSpy = vi.spyOn(Math, 'random').mockReturnValue(0.1) // ground 選択固定
+    try {
+      const make = () => {
+        const s = createInitialGameState()
+        s.phase = 'playing'
+        s.initialEnemiesSpawned = true
+        s.initialEnemiesRemaining = 0
+        s.spawnTimer = 0
+        s.spawnIntervalMs = 500
+        return s
+      }
+
+      const a = make()
+      const r1 = spawnEnemies(a, 250)
+      const r2 = spawnEnemies(a, 250)
+      const aTotal = r1.length + r2.length
+
+      const b = make()
+      const rb = spawnEnemies(b, 500)
+      const bTotal = rb.length
+
+      expect(aTotal).toBe(bTotal)
+      expect(a.spawnTimer).toBe(b.spawnTimer)
+    } finally {
+      randSpy.mockRestore()
+    }
+  })
+})
+
+// ─── 観点11: console 汚染なし ────────────────────────────────────
+
+describe('spawnEnemies — console 汚染なし', () => {
+  it('spawnEnemies の実行中に console.log / error / warn が呼ばれない', () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const state = createInitialGameState()
+      state.phase = 'playing'
+      // 初期スポーン + 通常スポーン + takokong まで一通り通す
+      spawnEnemies(state, 1)
+      spawnEnemies(state, 500)
+      spawnEnemies(state, 170_000)
+      expect(logSpy).not.toHaveBeenCalled()
+      expect(errorSpy).not.toHaveBeenCalled()
+      expect(warnSpy).not.toHaveBeenCalled()
+    } finally {
+      logSpy.mockRestore()
+      errorSpy.mockRestore()
+      warnSpy.mockRestore()
+    }
+  })
+})
+
+// ─── 観点12: generateMap の不変条件 ──────────────────────────────
+
+describe('generateMap — 不変条件', () => {
+  it('generateMap(19, 25) で player_house の位置が centerX=9 / centerY=12 で安定し、ピクセル換算が一定', () => {
+    const map = generateMap(19, 25)
+    const houses = map.flat().filter((p) => p.type === 'player_house')
+    expect(houses).toHaveLength(1)
+    expect(houses[0].x).toBe(9)
+    expect(houses[0].y).toBe(12)
+    // ピクセル中心座標
+    const cols = 19
+    const rows = 25
+    const offsetX = -(cols * TILE_SIZE) / 2
+    const offsetY = -(rows * TILE_SIZE) / 2
+    const px = 9 * TILE_SIZE + TILE_SIZE / 2 + offsetX
+    const py = 12 * TILE_SIZE + TILE_SIZE / 2 + offsetY
+    // mapLayer 中心 (0,0) に来るのが期待
+    expect(px).toBe(0)
+    expect(py).toBe(0)
+  })
+})
+
+// ─── 観点13-14: GameScene 統合（route 末尾 / 直線移動） ──────────
+
+describe('GameScene 相当のルート組み立て — water/underground 統合', () => {
+  it('water 敵の route 末尾が player_house パネルに一致し、最終セグメントを辿ると到達する', () => {
+    const state = createInitialGameState()
+    state.phase = 'playing'
+    const map = state.map
+    const goal = map.flat().find((p) => p.type === 'player_house')!
+
+    // water 敵を直接スポーンさせるため Math.random を 0.6 に固定（water 選択）
+    const randSpy = vi.spyOn(Math, 'random').mockReturnValue(0.6)
+    let waterEnemy: {
+      x: number
+      y: number
+      route: Array<{ x: number; y: number }>
+    } | null = null
+    try {
+      // 初期 3 体を消化させる
+      spawnEnemies(state, 1)
+      spawnEnemies(state, 200)
+      spawnEnemies(state, 200)
+      // 通常スポーンを 1 体出す
+      const result = spawnEnemies(state, 500)
+      const w = result.find((e) => e.type === 'water')
+      if (w) {
+        // GameScene の組み立てを再現
+        const width = map.length * TILE_SIZE
+        const height = map[0].length * TILE_SIZE
+        const offsetX = -width / 2
+        const offsetY = -height / 2
+        const startX = Math.round((w.x - offsetX) / TILE_SIZE)
+        const startY = Math.round((w.y - offsetY) / TILE_SIZE)
+        const waterGoal = findWaterGoalPanel(map, { x: goal.x, y: goal.y })
+        expect(waterGoal).not.toBeNull()
+        const route = findWaterPath(map, { x: startX, y: startY }, waterGoal!)
+        const fullRoute =
+          route.length > 0
+            ? [...route, { x: goal.x, y: goal.y }]
+            : [{ x: goal.x, y: goal.y }]
+        waterEnemy = { x: w.x, y: w.y, route: fullRoute }
+      }
+    } finally {
+      randSpy.mockRestore()
+    }
+    expect(waterEnemy).not.toBeNull()
+    // route 末尾は player_house パネル
+    const last = waterEnemy!.route[waterEnemy!.route.length - 1]
+    expect(last.x).toBe(goal.x)
+    expect(last.y).toBe(goal.y)
+  })
+
+  it('underground 敵は route=[] で生成され、原点 (0,0) への直線移動で dist<=1 になり削除される', () => {
+    const state = createInitialGameState()
+    state.phase = 'playing'
+
+    // underground を確実に出すため rand=0.95 に固定
+    const randSpy = vi.spyOn(Math, 'random').mockReturnValue(0.95)
+    let undergroundEnemy: {
+      x: number
+      y: number
+      speed: number
+      route: unknown[]
+    } | null = null
+    try {
+      // 初期 3 体消化
+      spawnEnemies(state, 1)
+      spawnEnemies(state, 200)
+      spawnEnemies(state, 200)
+      const result = spawnEnemies(state, 500)
+      const u = result.find((e) => e.type === 'underground')
+      if (u)
+        undergroundEnemy = { x: u.x, y: u.y, speed: u.speed, route: u.route }
+    } finally {
+      randSpy.mockRestore()
+    }
+    expect(undergroundEnemy).not.toBeNull()
+    // EnemyManager は route を空配列で返す（GameScene が直線移動させる）
+    expect(undergroundEnemy!.route).toEqual([])
+
+    // advanceEnemies の直線移動ロジックを模倣して dist<=1 まで進める
+    let { x, y } = undergroundEnemy!
+    const speed = undergroundEnemy!.speed
+    const deltaMS = 16
+    let removed = false
+    for (let step = 0; step < 100_000; step++) {
+      const dx = 0 - x
+      const dy = 0 - y
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      if (dist <= 1) {
+        removed = true
+        break
+      }
+      const norm = (speed * deltaMS * 0.05) / dist
+      x += dx * norm
+      y += dy * norm
+    }
+    expect(removed).toBe(true)
   })
 })

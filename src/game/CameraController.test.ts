@@ -24,7 +24,10 @@ describe('calcShakeOffset', () => {
   })
 
   it('remainingMs>0 のとき nextShake.remainingMs が減る', () => {
-    const { nextShake } = calcShakeOffset({ remainingMs: 500, intensity: 8 }, 16)
+    const { nextShake } = calcShakeOffset(
+      { remainingMs: 500, intensity: 8 },
+      16
+    )
     expect(nextShake.remainingMs).toBe(484)
   })
 
@@ -61,7 +64,7 @@ describe('applyZoom', () => {
   })
 
   it('t=0.5 でイージングが適用されている（単純線形でない）', () => {
-    const linear = cam.scale + (2 - cam.scale) * 0.5  // 1.5
+    const linear = cam.scale + (2 - cam.scale) * 0.5 // 1.5
     const result = applyZoom(cam, 2, 0.5)
     // easeInOut(0.5) = 0.5 なので linear と同じ値になるが、
     // easeInOut(0.25) = 0.125、easeInOut(0.75) = 0.875 で非線形を確認

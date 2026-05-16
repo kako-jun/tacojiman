@@ -35,3 +35,21 @@ The current PixiJS baseline covers:
 
 The migrated Phaser code has not been deleted outright; it is retained in
 `legacy/phaser-src/` until each gameplay feature is ported and checked.
+
+## Enemy Spawn System (#31)
+
+Enemy spawning is driven by `spawnEnemies(state, deltaMS, randomSource?)` in
+`src/game/EnemyManager.ts`. The function is pure aside from mutating the
+following `GameState` fields (kept on `GameState` so save/restore works):
+
+- `spawnTimer` — accumulated milliseconds since game start (for interval crossings).
+- `initialEnemiesSpawned` / `initialEnemiesRemaining` / `initialEnemiesNextDelayMs` —
+  the legacy 3-ground intro: one ground enemy per frame, 200 ms apart.
+- `spawnIntervalMs` / `spawnRateUpgradeAccumMs` — base interval starts at 500 ms,
+  decays by 0.8 every 15 s, floored at 200 ms.
+- `maxEnemies` / `maxEnemiesUpgradeAccumMs` — starts at 40, grows by 5 every 15 s,
+  capped at 70. `takokong` is excluded from this cap.
+- `takokongSpawned` — boss flag, set once `elapsedMs + deltaMS >= 170_000`.
+
+`randomSource` defaults to `Math.random` and is threaded into every per-type
+spawn helper for test determinism.

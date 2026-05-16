@@ -12,7 +12,7 @@ import {
   type GameState,
   type MapPanel,
 } from '../types/GameState'
-import { findPath } from '../game/map'
+import { findPath, findWaterGoalPanel, findWaterPath } from '../game/map'
 import { KeyboardManager } from '../game/KeyboardManager'
 import { spawnEnemies } from '../game/EnemyManager'
 import { applyBombDamage } from '../game/BombJutsu'
@@ -115,7 +115,7 @@ export class GameScene extends Container {
       this.bombText,
       this.bombStockText,
       this.minimapGraphics,
-      this.minimapMarker,
+      this.minimapMarker
     )
   }
 
@@ -208,13 +208,40 @@ export class GameScene extends Container {
       if (goalPanel) {
         const startX = Math.round((e.x - offsetX) / TILE_SIZE)
         const startY = Math.round((e.y - offsetY) / TILE_SIZE)
-        const route = findPath(
-          map,
-          { x: startX, y: startY },
-          { x: goalPanel.x, y: goalPanel.y }
-        )
-        e.route =
-          route.length > 0 ? route : [{ x: goalPanel.x, y: goalPanel.y }]
+        if (e.type === 'ground') {
+          const route = findPath(
+            map,
+            { x: startX, y: startY },
+            { x: goalPanel.x, y: goalPanel.y }
+          )
+          e.route =
+            route.length > 0 ? route : [{ x: goalPanel.x, y: goalPanel.y }]
+        } else if (e.type === 'water') {
+          // 水タコは water/river ネットワークを A* で辿る
+          const waterGoal = findWaterGoalPanel(map, {
+            x: goalPanel.x,
+            y: goalPanel.y,
+          })
+          if (waterGoal !== null) {
+            const route = findWaterPath(
+              map,
+              { x: startX, y: startY },
+              waterGoal
+            )
+            // Q2: 水路の終端から家へ突入する視覚演出のため、敢えて water/river
+            //     ネットワーク外の player_house を route 末尾に接続している。
+            //     A* は water/river ネットワーク内のみで動くので、最後の 1 セグメントは
+            //     ネットワーク外の player_house へ直線補間で「上陸する」イメージ。
+            e.route =
+              route.length > 0
+                ? [...route, { x: goalPanel.x, y: goalPanel.y }]
+                : [{ x: goalPanel.x, y: goalPanel.y }]
+          } else {
+            e.route = [{ x: goalPanel.x, y: goalPanel.y }]
+          }
+        }
+        // air / underground / takokong は route=[] のまま
+        // advanceEnemies の else 分岐で直線移動する
       }
       this.state.enemies.push(e)
     }
@@ -222,13 +249,20 @@ export class GameScene extends Container {
     // 新しくスポーンした敵の中に takokong があればズームイン
     for (const e of newEnemies) {
       if (e.type === 'takokong') {
-        this.state.zoomState = { targetScale: 1.5, durationMs: 1000, elapsedMs: 0 }
+        this.state.zoomState = {
+          targetScale: 1.5,
+          durationMs: 1000,
+          elapsedMs: 0,
+        }
       }
     }
 
     // シェイク適用
     const state = this.state
-    const { dx, dy, nextShake } = calcShakeOffset(state.shakeState, ticker.deltaMS)
+    const { dx, dy, nextShake } = calcShakeOffset(
+      state.shakeState,
+      ticker.deltaMS
+    )
     state.shakeState = nextShake
     this.mapLayer.x = VIEW_WIDTH / 2 + dx
     this.mapLayer.y = VIEW_HEIGHT / 2 + dy
@@ -236,7 +270,10 @@ export class GameScene extends Container {
     // ズーム適用
     if (state.zoomState) {
       state.zoomState.elapsedMs += ticker.deltaMS
-      const t = Math.min(1, state.zoomState.elapsedMs / state.zoomState.durationMs)
+      const t = Math.min(
+        1,
+        state.zoomState.elapsedMs / state.zoomState.durationMs
+      )
       state.camera = applyZoom(state.camera, state.zoomState.targetScale, t)
       this.mapLayer.scale.set(state.camera.scale)
       if (t >= 1) {
@@ -248,7 +285,7 @@ export class GameScene extends Container {
 
     // takokong が消えたらズームリセット
     if (state.takokongSpawned && !this.takokongDefeated) {
-      if (!state.enemies.some(e => e.type === 'takokong')) {
+      if (!state.enemies.some((e) => e.type === 'takokong')) {
         // takokong が消えた（撃破または到達）
         this.takokongDefeated = true
         state.zoomState = null
@@ -507,7 +544,12 @@ export class GameScene extends Container {
     const hpGap = 2
     for (let i = 0; i < maxHp; i++) {
       const color = i < state.playerHp ? COLORS.enemyHp2 : 0x555555
-      this.uiGraphics.rect(14 + i * (hpBoxSize + hpGap), 42, hpBoxSize, hpBoxSize)
+      this.uiGraphics.rect(
+        14 + i * (hpBoxSize + hpGap),
+        42,
+        hpBoxSize,
+        hpBoxSize
+      )
       this.uiGraphics.fill(color)
     }
 
@@ -517,8 +559,8 @@ export class GameScene extends Container {
 
     // プレイヤーマーカー（ミニマップ）
     const map = state.map
-    const mapW = map.length        // 19
-    const mapH = map[0].length     // 25
+    const mapW = map.length // 19
+    const mapH = map[0].length // 25
     const mmW = 80
     const mmH = 80
     const cellW = mmW / mapW
@@ -593,12 +635,17 @@ export class GameScene extends Container {
           enemy.y = from.py + (to.py - from.py) * segT
         }
       } else {
-        // air: 左から右へ直線移動
+        // air: 4 辺ランダム入射 → 家 (0,0) 方向へ直進
         if (enemy.type === 'air') {
-          enemy.x += enemy.speed * deltaMS * 0.08
-          const rightEdge = width / 2 + 200
-          if (enemy.x > rightEdge) {
+          const dx = 0 - enemy.x
+          const dy = 0 - enemy.y
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          if (dist <= 1) {
             state.enemies.splice(i, 1)
+          } else {
+            const norm = (enemy.speed * deltaMS * 0.05) / dist
+            enemy.x += dx * norm
+            enemy.y += dy * norm
           }
         }
         // takokong: player_house に向かって直進（x=0, y=0 つまり mapLayer 中心）
@@ -608,6 +655,19 @@ export class GameScene extends Container {
           const dist = Math.sqrt(dx * dx + dy * dy)
           if (dist <= 1) {
             // player_house 到達 → 除去
+            state.enemies.splice(i, 1)
+          } else {
+            const norm = (enemy.speed * deltaMS * 0.05) / dist
+            enemy.x += dx * norm
+            enemy.y += dy * norm
+          }
+        }
+        // underground: rice_field から直線で家へ
+        else if (enemy.type === 'underground') {
+          const dx = 0 - enemy.x
+          const dy = 0 - enemy.y
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          if (dist <= 1) {
             state.enemies.splice(i, 1)
           } else {
             const norm = (enemy.speed * deltaMS * 0.05) / dist
