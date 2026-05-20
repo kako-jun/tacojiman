@@ -379,7 +379,10 @@ export class GameScene extends Container {
       const world = screenToWorld(
         this.state.camera,
         this.pointerDownPos.x,
-        this.pointerDownPos.y
+        this.pointerDownPos.y,
+        VIEW_WIDTH,
+        VIEW_HEIGHT,
+        this.mapLayer.rotation
       )
       this.state.camera = startZoomIn(this.state.camera, world.x, world.y)
     }
@@ -1291,7 +1294,14 @@ export class GameScene extends Container {
 
     // 既にズーム中（連打）→ checkAttackHit を即実行
     if (this.isLongPressing && this.state.camera.scale > 1) {
-      const world = screenToWorld(this.state.camera, screenX, screenY)
+      const world = screenToWorld(
+        this.state.camera,
+        screenX,
+        screenY,
+        VIEW_WIDTH,
+        VIEW_HEIGHT,
+        this.mapLayer.rotation
+      )
       this.attackAt(world.x, world.y)
       return
     }
@@ -1305,7 +1315,14 @@ export class GameScene extends Container {
     if (this.state === null || this.state.phase !== 'playing') return
     if (!this.isLongPressing) return
     // 長押し中はズーム中心を追従させる
-    const world = screenToWorld(this.state.camera, e.global.x, e.global.y)
+    const world = screenToWorld(
+      this.state.camera,
+      e.global.x,
+      e.global.y,
+      VIEW_WIDTH,
+      VIEW_HEIGHT,
+      this.mapLayer.rotation
+    )
     this.state.camera = startZoomIn(this.state.camera, world.x, world.y)
   }
 
@@ -1319,7 +1336,14 @@ export class GameScene extends Container {
 
     const screenX = e.global.x
     const screenY = e.global.y
-    const world = screenToWorld(this.state.camera, screenX, screenY)
+    const world = screenToWorld(
+      this.state.camera,
+      screenX,
+      screenY,
+      VIEW_WIDTH,
+      VIEW_HEIGHT,
+      this.mapLayer.rotation
+    )
 
     const kind = classifyPointerUp(downAt, this.nowMs)
     if (kind === 'long_release' || this.isLongPressing) {

@@ -208,4 +208,34 @@ describe('screenToWorld', () => {
     const w = screenToWorld(cam, VIEW_WIDTH / 2, VIEW_HEIGHT / 2)
     expect(w).toEqual({ x: 30, y: 40 })
   })
+
+  it('rotation が π/2（90°）のとき、画面右方向のタップは world で下方向にマップされる', () => {
+    // mapLayer が 90° 回転している状態 = タップ点が world 座標系では 90° 逆回転される
+    // 画面右 (+100, 0) は world では (0, -100) になる（mapLayer が CCW 90° 回転していれば）
+    const cam = makeCam()
+    const w = screenToWorld(
+      cam,
+      VIEW_WIDTH / 2 + 100,
+      VIEW_HEIGHT / 2,
+      VIEW_WIDTH,
+      VIEW_HEIGHT,
+      Math.PI / 2
+    )
+    expect(w.x).toBeCloseTo(0, 5)
+    expect(w.y).toBeCloseTo(-100, 5)
+  })
+
+  it('rotation=π（180°）で画面右は world 左にマップされる', () => {
+    const cam = makeCam()
+    const w = screenToWorld(
+      cam,
+      VIEW_WIDTH / 2 + 100,
+      VIEW_HEIGHT / 2,
+      VIEW_WIDTH,
+      VIEW_HEIGHT,
+      Math.PI
+    )
+    expect(w.x).toBeCloseTo(-100, 5)
+    expect(w.y).toBeCloseTo(0, 5)
+  })
 })

@@ -120,20 +120,30 @@ export function getCurrentZoom(camera: CameraState): number {
 /**
  * スクリーン座標 (screenX, screenY) を mapLayer ローカル座標に変換する。
  *
- * mapLayer の表示則:
- *   screen = (VIEW_WIDTH/2 + (world - pivot) * scale,
- *             VIEW_HEIGHT/2 + (world - pivot) * scale)
- * を world について解く。
+ * mapLayer の表示則（PixiJS 上での変換順）:
+ *   screen = mapLayer.position + R(rotation) · (scale · (world - pivot))
+ *   ただし mapLayer.position = (viewW/2, viewH/2)
+ * を world について解く:
+ *   world = pivot + (1 / scale) · R(-rotation) · (screen - mapLayer.position)
+ *
+ * `rotation` 引数を省略すると 0 として扱う（既存テストとの後方互換）。
+ * `GameScene.mapLayer.rotation` を毎タップ時に渡さないと、回転中のタップ位置が
+ * 世界座標で 90°ぶんずれる（#41 マップ回転 + #46 タップフィードバックの合せ技でのみ顕在化）。
  */
 export function screenToWorld(
   camera: CameraState,
   screenX: number,
   screenY: number,
   viewW: number = VIEW_WIDTH,
-  viewH: number = VIEW_HEIGHT
+  viewH: number = VIEW_HEIGHT,
+  rotation: number = 0
 ): { x: number; y: number } {
-  const x = (screenX - viewW / 2) / camera.scale + camera.pivot.x
-  const y = (screenY - viewH / 2) / camera.scale + camera.pivot.y
+  const dx = (screenX - viewW / 2) / camera.scale
+  const dy = (screenY - viewH / 2) / camera.scale
+  const cos = Math.cos(-rotation)
+  const sin = Math.sin(-rotation)
+  const x = camera.pivot.x + dx * cos - dy * sin
+  const y = camera.pivot.y + dx * sin + dy * cos
   return { x, y }
 }
 
