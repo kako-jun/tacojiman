@@ -7,6 +7,7 @@ import type {
 import {
   computeTakokongDamage,
   createTakokongState,
+  MAP_RADIUS_PX,
   TAKOKONG_DEFEAT_BONUS,
   TILE_SIZE,
 } from '../types/GameState'
@@ -196,37 +197,20 @@ function makeWaterEnemy(
  * 空タコのスポーン位置（4 辺ランダム入射）を返す。
  * 出現したら家 (0,0) 方向へ直進する（移動は GameScene 側）。
  */
+// 円形マップの外（半径 MAP_RADIUS_PX）から内側 (0,0) へ直進する形で空タコを出現させる。
+// 旧 4 辺ランダム方式だと、円形マップでは円外の黒地（rice_field でも path でもない場所）
+// からフェードインする見た目になっていた。円外周にスポーン位置を揃えることで「円の縁から
+// 飛び込んで来る」表現にする。
+const AIR_SPAWN_MARGIN = 40
 function makeAirEnemy(
   ctx: SpawnContext,
   rand: () => number = Math.random
 ): EnemyState {
-  const margin = 200
-  const edge = Math.floor(rand() * 4)
-  let x: number
-  let y: number
-  switch (edge) {
-    case 0:
-      // 上辺
-      x = ctx.offsetX + rand() * ctx.width
-      y = ctx.offsetY - margin
-      break
-    case 1:
-      // 右辺
-      x = ctx.offsetX + ctx.width + margin
-      y = ctx.offsetY + rand() * ctx.height
-      break
-    case 2:
-      // 下辺
-      x = ctx.offsetX + rand() * ctx.width
-      y = ctx.offsetY + ctx.height + margin
-      break
-    case 3:
-    default:
-      // 左辺
-      x = ctx.offsetX - margin
-      y = ctx.offsetY + rand() * ctx.height
-      break
-  }
+  void ctx
+  const angle = rand() * Math.PI * 2
+  const dist = MAP_RADIUS_PX + AIR_SPAWN_MARGIN
+  const x = Math.cos(angle) * dist
+  const y = Math.sin(angle) * dist
   return makeEnemy('air', x, y)
 }
 

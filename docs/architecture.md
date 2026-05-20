@@ -197,14 +197,13 @@ partially hidden (the parts beyond `MAP_RADIUS_PX`).
 - **underground** — spawn is constrained to `UNDERGROUND_HOUSE_RADIUS = 3`
   tiles around the player house. That always lies inside the circle, so
   off-screen spawns are not possible from this path.
-- **air** — current implementation picks one of the four `mapLayer`-local
-  edges (top / right / bottom / left) at uniform random and walks toward
-  `(0, 0)`. With the larger 27×27 map, those four edges are further out
-  than before but the shape is still rectangular, not circular. Air enemies
-  may therefore appear to materialize from a corner that the circular
-  background does not cover. Visually acceptable for now (air heads
-  straight to home); a follow-up issue can swap to "angle + radius"
-  sampling if needed.
+- **air** — samples a uniform angle in `[0, 2π)` and places the enemy at
+  `(cos θ, sin θ) * (MAP_RADIUS_PX + AIR_SPAWN_MARGIN)`, i.e. just outside
+  the circular map edge. The enemy then flies in a straight line toward
+  `(0, 0)` (existing `advanceEnemies` path). This matches the circular
+  silhouette so air enemies appear to break in from the edge of the
+  visible map rather than materializing in a corner of the underlying
+  rectangular grid.
 
 `playMapIntroAnimation()` runs once per `GameScene` instance, gated by an
 `introPlayed: boolean` flag (re-`init` calls during the same scene do not
