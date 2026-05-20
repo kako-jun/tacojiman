@@ -131,6 +131,42 @@ plus the constants `SCREENSHOT_INTERVAL_MS = 60_000` and `SCREENSHOT_MAX_COUNT
 
 These modules import nothing from PixiJS and are covered by dedicated tests.
 
+## Map Intro Animation (#53 #57)
+
+`drawMap` in `src/scenes/GameScene.ts` paints the map in two stacked layers
+inside `mapLayer`:
+
+- **`mapGraphics`** — a single Graphics holding only the background fill. The
+  rect is sized to cover the view diagonal so the four corners never expose
+  black geometry when `mapLayer` rotates (#57). Math:
+  `viewDiagHalf = ceil(sqrt(VIEW_WIDTH^2 + VIEW_HEIGHT^2) / 2) + 40` (40px
+  margin). For 400×600 this evaluates to ~401px half-extent, comfortably
+  covering the ~360px half-diagonal of the view.
+- **`tilesContainer`** + **`tileGraphicsList: Graphics[]`** — one Graphics per
+  map panel (#53). Each tile draws in its own local coordinate system (origin
+  at tile center), with `g.x` / `g.y` placed at the tile's world-center
+  (relative to `mapLayer`). This lets `scale` animate around the tile center
+  without needing pivot manipulation.
+
+`playMapIntroAnimation()` runs once per `GameScene` instance, gated by an
+`introPlayed: boolean` flag (re-`init` calls during the same scene do not
+replay the intro to avoid flicker). For each tile it computes the radial
+distance from the home (`0,0`):
+
+```
+d = sqrt(g.x^2 + g.y^2)
+delay = (d / TILE_SIZE) * 0.05  // 50 ms per tile of distance
+```
+
+Then `gsap.to` tweens `scale 0→1` (`back.out(2)`) and `alpha 0→1`
+(`power2.out`) with `duration: 0.4`. Tiles closer to the home pop in first;
+the wavefront expands outward.
+
+Rotation is **not** paused during the intro — the dramatic effect of tiles
+materializing while the map already spins is intentional. `tilesContainer` is
+a child of `mapLayer`, so each tile's `scale` is local and unaffected by the
+rotation transform of the parent.
+
 ## Tap Feedback Effects (post-#46)
 
 `src/scenes/EffectManager.ts` is a child container of `mapLayer` (so its
