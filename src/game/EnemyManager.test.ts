@@ -860,6 +860,69 @@ describe('checkAttackHit', () => {
     expect(result.earnedScore).toBe(ENEMY_SPECS.air.score * 3)
   })
 
+  it('小数 zoomMultiplier (1.84) でも earnedScore は floor で整数になる', () => {
+    // ズーム中 (scale=1.84) に空敵 (score=3) を倒した場合: floor(3 * 1.84) = floor(5.52) = 5
+    const state = makeStateWith([
+      {
+        id: 'a1',
+        type: 'air',
+        hp: 1,
+        speed: 0.6,
+        x: 0,
+        y: 0,
+        routeProgress: 0,
+        route: [],
+      },
+    ])
+    const result = checkAttackHit(
+      state,
+      0,
+      0,
+      ATTACK_RANGE,
+      ATTACK_DAMAGE,
+      1.84
+    )
+    expect(result.earnedScore).toBe(5)
+    expect(Number.isInteger(result.earnedScore)).toBe(true)
+  })
+
+  it('複数撃破時、各撃破ごとに floor されてから合算される', () => {
+    // 撃破ごとに floor: floor(3*1.5)=4 が 2 体分 → 8 (= floor(9))
+    // 一括 floor だと floor(3*2*1.5) = 9 になるので、ここで実装の意図を区別できる
+    const state = makeStateWith([
+      {
+        id: 'a1',
+        type: 'air',
+        hp: 1,
+        speed: 0.6,
+        x: 5,
+        y: 0,
+        routeProgress: 0,
+        route: [],
+      },
+      {
+        id: 'a2',
+        type: 'air',
+        hp: 1,
+        speed: 0.6,
+        x: -5,
+        y: 0,
+        routeProgress: 0,
+        route: [],
+      },
+    ])
+    const result = checkAttackHit(
+      state,
+      0,
+      0,
+      ATTACK_RANGE,
+      ATTACK_DAMAGE,
+      1.5
+    )
+    expect(result.defeatedEnemyIds).toHaveLength(2)
+    expect(result.earnedScore).toBe(8) // 4 + 4
+  })
+
   it('複数の敵を同時に倒した場合のスコア合算', () => {
     const state = makeStateWith([
       {

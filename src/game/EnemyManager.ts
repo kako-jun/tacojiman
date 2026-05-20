@@ -11,6 +11,7 @@ import {
   TAKOKONG_DEFEAT_BONUS,
   TILE_SIZE,
 } from '../types/GameState'
+import { calculateFinalScore } from './domain/ScoreCalculator'
 import { findPathEdgePosition, findWaterGoalPanel, findWaterPath } from './map'
 import {
   ENEMY_SPAWN_WEIGHTS,
@@ -396,7 +397,8 @@ export interface AttackHitResult {
  * mapLayer ローカル座標 (worldX, worldY) を中心とした攻撃判定。
  * - 範囲 (range 半径) 内の敵に damage を与える
  * - 敵が乗っている panel が 'other_house' / 'station' なら無敵エリア扱いでスキップ
- * - HP <= 0 になった敵は除去し、スコアに ENEMY_SPECS[type].score * zoomMultiplier を加算
+ * - HP <= 0 になった敵は除去し、スコアに floor(ENEMY_SPECS[type].score * zoomMultiplier) を加算
+ *   (zoomMultiplier は小数 1.0–3.0、撃破ごとに切り捨て→合算スコアを整数に保つ)
  *
  * 副作用あり: state.enemies を破壊的に変更する（HP 更新 + 撃破した敵を除去）。
  */
@@ -451,7 +453,8 @@ export function checkAttackHit(
         tk.defeated = true
         tk.active = false
         const score =
-          ENEMY_SPECS.takokong.score * zoomMultiplier + TAKOKONG_DEFEAT_BONUS
+          calculateFinalScore(ENEMY_SPECS.takokong.score, zoomMultiplier) +
+          TAKOKONG_DEFEAT_BONUS
         earned += score
         defeated.push(enemy.id)
         defeatedDetails.push({
@@ -470,7 +473,10 @@ export function checkAttackHit(
 
     enemy.hp -= damage
     if (enemy.hp <= 0) {
-      const score = ENEMY_SPECS[enemy.type].score * zoomMultiplier
+      const score = calculateFinalScore(
+        ENEMY_SPECS[enemy.type].score,
+        zoomMultiplier
+      )
       earned += score
       defeated.push(enemy.id)
       defeatedDetails.push({

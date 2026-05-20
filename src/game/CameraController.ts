@@ -63,6 +63,48 @@ export function startZoomIn(
 }
 
 /**
+ * 長押し追従中のリターゲット。target scale は固定で LONG_PRESS_TARGET_SCALE。
+ *
+ * 既にズーム中 (camera.zoom !== null) ならアニメの進捗 (elapsedMs / fromScale / fromPivot)
+ * を維持し、toPivot だけ書き換える。pointermove ごとに毎回 startZoomIn を呼ぶと
+ * elapsedMs=0 で動き出しが何度もリセットされ、特に高ズーム域でカクつくため。
+ *
+ * ズーム未開始 (zoom=null) の場合は startZoomIn で新規に開始するが、既に target scale に
+ * 到達済 (camera.scale ≈ LONG_PRESS_TARGET_SCALE) ならピボットだけ追従させたいので
+ * duration を短くする (LONG_PRESS_FOLLOW_PIVOT_DURATION_MS)。指を止めて再度動かす経路で
+ * 毎回 300ms ramp を繰り返さないため。
+ */
+const LONG_PRESS_TARGET_SCALE = 3.0
+const LONG_PRESS_FOLLOW_PIVOT_DURATION_MS = 80
+
+export function followZoom(
+  camera: CameraState,
+  targetX: number,
+  targetY: number
+): CameraState {
+  if (camera.zoom === null) {
+    const atTargetScale =
+      Math.abs(camera.scale - LONG_PRESS_TARGET_SCALE) < 1e-6
+    const duration = atTargetScale ? LONG_PRESS_FOLLOW_PIVOT_DURATION_MS : 300
+    return startZoomIn(
+      camera,
+      targetX,
+      targetY,
+      LONG_PRESS_TARGET_SCALE,
+      duration
+    )
+  }
+  return {
+    ...camera,
+    zoom: {
+      ...camera.zoom,
+      toPivot: { x: targetX, y: targetY },
+      toScale: LONG_PRESS_TARGET_SCALE,
+    },
+  }
+}
+
+/**
  * 家中心 (0,0) へのズームアウト開始。scale=1, pivot=(0,0) に戻す。
  */
 export function zoomOut(
@@ -84,6 +126,14 @@ export function zoomOut(
 
 /**
  * ズーム中なら deltaMS だけ進める。完了したら zoom=null にする。
+ *
+ * ズームイン (toScale > fromScale) のときだけスケールを対数（幾何）補間する。
+ * 線形補間 (1→3) だと t=0.9 付近で残り 10% のスケール変化が
+ * 既に拡大率の大きい画面上では大きな視覚移動になり、引っかかって見えるため。
+ * ズームアウト (3→1) は逆に「最初は速く、終わりはゆっくり止まる」のが自然なので
+ * 既存の線形補間 + easeInOut を維持する。
+ *
+ * 不変条件: CameraState.scale は常に > 0（resetCamera で 1 起点、updateZoom で 0 を作らない）。
  */
 export function updateZoom(camera: CameraState, deltaMS: number): CameraState {
   const z = camera.zoom
@@ -91,7 +141,10 @@ export function updateZoom(camera: CameraState, deltaMS: number): CameraState {
   const elapsed = z.elapsedMs + deltaMS
   const t = Math.min(1, elapsed / z.durationMs)
   const eased = easeInOut(t)
-  const scale = z.fromScale + (z.toScale - z.fromScale) * eased
+  const scale =
+    z.toScale > z.fromScale
+      ? z.fromScale * Math.pow(z.toScale / z.fromScale, eased)
+      : z.fromScale + (z.toScale - z.fromScale) * eased
   const pivotX = z.fromPivot.x + (z.toPivot.x - z.fromPivot.x) * eased
   const pivotY = z.fromPivot.y + (z.toPivot.y - z.fromPivot.y) * eased
   if (t >= 1) {

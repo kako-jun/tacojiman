@@ -52,6 +52,7 @@ import {
   getCurrentZoom,
   screenToWorld,
   startZoomIn,
+  followZoom,
   updateZoom,
   zoomOut,
 } from '../game/CameraController'
@@ -1323,7 +1324,7 @@ export class GameScene extends Container {
       VIEW_HEIGHT,
       this.mapLayer.rotation
     )
-    this.state.camera = startZoomIn(this.state.camera, world.x, world.y)
+    this.state.camera = followZoom(this.state.camera, world.x, world.y)
   }
 
   private handlePointerUp(e: FederatedPointerEvent): void {
@@ -1366,6 +1367,8 @@ export class GameScene extends Container {
    */
   private attackAt(worldX: number, worldY: number): void {
     if (this.state === null) return
+    // 倍率自体は 1.0 〜 3.0 の連続値のまま渡す。撃破ごとに checkAttackHit 側で
+    // calculateFinalScore (= Math.floor(score * multiplier)) し、合算が小数化しないようにする。
     const zoomMul = getCurrentZoom(this.state.camera)
     // タップ位置に攻撃範囲リングを表示。
     // ATTACK_RANGE は mapLayer ローカル座標で固定（zoom で広がらない仕様: CLAUDE.md）。

@@ -261,6 +261,23 @@ at the tap position). The aggregate `MULTI HIT` label is placed at the
 centroid of the defeated enemies, offset by `-24` in mapLayer-local y (the
 wrapper re-orients it to true screen-up).
 
+The `zoomMultiplier` passed into `checkAttackHit` is the live camera scale
+**as a fractional value** in `[1.0, 3.0]` (1.0 at the home view, 3.0 at full
+long-press zoom, any in-flight interpolated value in between). The
+multiplier itself is never exposed in the HUD — there is no "x1" / "x2"
+label to render. To keep accumulated `state.score` an integer regardless of
+mid-animation kills, `checkAttackHit` applies
+`calculateFinalScore(baseScore, zoomMultiplier)` (= `Math.floor(base *
+mul)`) per defeated enemy. Takokong adds the integer
+`TAKOKONG_DEFEAT_BONUS` outside the floor so the bonus is not eroded by
+fractional multipliers (`calculateFinalScore(takokong.score, mul) +
+TAKOKONG_DEFEAT_BONUS`). The flooring happens **per kill** (not on the
+aggregate), so e.g. two simultaneous kills at mul=1.5 yield `4 + 4 = 8`,
+not `floor(3*2*1.5) = 9` — matching the way kills are surfaced one-by-one
+in `defeatedDetails`. Consequently `DefeatedEnemyDetail.score` is always an
+integer, ready for any future per-kill display (e.g. "+3 ×1.2") without
+further rounding.
+
 Bomb / mine / sentry / multi-hit-bomb score-gain emits still fire once at
 the explosion epicenter rather than per defeated enemy — those effects
 already have loud area visuals, and `applyBombDamage` does not currently
@@ -269,6 +286,34 @@ surface per-enemy positions. Aligning them is a follow-up if needed.
 `LONG_PRESS_THRESHOLD_MS` was reduced from 300 → 180 ms in
 `src/game/PointerInput.ts` so zoom engages faster on touch while staying
 above the typical short-tap duration to avoid false long-press triggers.
+
+## Long-Press Zoom Smoothing
+
+`CameraController.updateZoom` interpolates `scale` **in log space when
+zooming in** (`toScale > fromScale`): `scale = fromScale * (toScale /
+fromScale)^eased`. With a linear interpolation (1 → 3 with easeInOut), the
+last 10 % of `t` only moves scale from ~2.9 to 3.0, but at that point each
+unit of scale change covers a much larger swath of pixels — the resulting
+"tail" of the animation visibly hitches even though the eased value is
+monotonic. Geometric (log) interpolation gives roughly constant perceived
+zoom velocity across the full animation. Zoom-**out** (`toScale <=
+fromScale`) deliberately keeps the linear path so the "fast at first, eases
+to a stop" feel of returning to the home view is preserved. Pivot always
+uses linear interpolation (pixel-domain motion already feels uniform).
+
+`CameraController.followZoom` is used by `GameScene.handlePointerMove` for
+the long-press tracking case. Calling `startZoomIn` on every pointer move
+would reset `elapsedMs` to 0 and rebuild `fromScale` / `fromPivot` from the
+in-flight values, producing a series of restarted easings that visibly
+stutter at high zoom (small re-eased deltas applied to large on-screen
+distances). `followZoom` instead mutates only `toPivot` of an existing
+`camera.zoom`, preserving the animation's `elapsedMs` and original `from*`
+anchors. If no zoom is active, it delegates to `startZoomIn` — and when the
+camera has already reached the target scale, it uses a shorter duration
+(`LONG_PRESS_FOLLOW_PIVOT_DURATION_MS = 80`) so a brief finger-pause
+followed by another swipe doesn't restart a full 300 ms ramp every time.
+`toScale` is fixed to `LONG_PRESS_TARGET_SCALE = 3.0` inside `followZoom`;
+variable-depth zoom is intentionally not exposed (YAGNI).
 
 ## Pause Phase (#45)
 

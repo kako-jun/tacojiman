@@ -4,6 +4,7 @@ import {
   calcShakeOffset,
   applyZoom,
   startZoomIn,
+  followZoom,
   zoomOut,
   updateZoom,
   getCurrentZoom,
@@ -161,6 +162,21 @@ describe('updateZoom', () => {
     expect(next.zoom).not.toBeNull()
   })
 
+  it('ズームイン (1→3) は対数補間で t=0.5 のとき幾何平均 √3 に近い', () => {
+    // 線形なら 1 + (3-1)*0.5 = 2.0 になる。log-space なら √(1*3) = √3 ≈ 1.732
+    const cam = startZoomIn(makeCam(), 0, 0, 3.0, 300)
+    const next = updateZoom(cam, 150) // t=0.5, easeInOut(0.5)=0.5
+    expect(next.scale).toBeCloseTo(Math.sqrt(3), 3)
+    expect(next.scale).toBeLessThan(2.0)
+  })
+
+  it('ズームアウト (3→1) は線形補間で t=0.5 のとき 2.0 になる (log を適用しない)', () => {
+    // ズームアウトでは log-space を使わず線形 + easeInOut のまま
+    const cam = zoomOut(makeCam({ scale: 3, pivot: { x: 0, y: 0 } }), 300)
+    const next = updateZoom(cam, 150) // t=0.5
+    expect(next.scale).toBeCloseTo(2.0, 3)
+  })
+
   it('完了時に zoom=null かつ scale=toScale, pivot=toPivot', () => {
     const cam = startZoomIn(makeCam(), 100, 50, 3.0, 200)
     const next = updateZoom(cam, 200)
@@ -174,6 +190,41 @@ describe('updateZoom', () => {
     const next = updateZoom(cam, 99999)
     expect(next.scale).toBe(3.0)
     expect(next.zoom).toBeNull()
+  })
+})
+
+describe('followZoom', () => {
+  it('zoom=null かつ scale=1 のとき startZoomIn 相当の新規ズームを開始する', () => {
+    const cam = followZoom(makeCam(), 100, 50)
+    expect(cam.zoom).not.toBeNull()
+    expect(cam.zoom!.fromScale).toBe(1)
+    expect(cam.zoom!.toScale).toBe(3.0)
+    expect(cam.zoom!.toPivot).toEqual({ x: 100, y: 50 })
+    expect(cam.zoom!.durationMs).toBe(300)
+    expect(cam.zoom!.elapsedMs).toBe(0)
+  })
+
+  it('zoom=null かつ既に target scale に到達済なら短い duration でピボット追従する', () => {
+    const cam = followZoom(makeCam({ scale: 3.0 }), 200, 80)
+    expect(cam.zoom).not.toBeNull()
+    expect(cam.zoom!.fromScale).toBe(3.0)
+    expect(cam.zoom!.toScale).toBe(3.0)
+    expect(cam.zoom!.toPivot).toEqual({ x: 200, y: 80 })
+    // 通常 300ms より短い (= 指を動かすたびに 300ms ramp を繰り返さない)
+    expect(cam.zoom!.durationMs).toBeLessThan(300)
+  })
+
+  it('既にズーム中なら toPivot だけ更新し elapsedMs / fromScale / fromPivot を維持する', () => {
+    let cam = startZoomIn(makeCam(), 100, 100, 3.0, 300)
+    cam = updateZoom(cam, 100) // elapsedMs = 100
+    const elapsedBefore = cam.zoom!.elapsedMs
+    const fromScaleBefore = cam.zoom!.fromScale
+    const fromPivotBefore = { ...cam.zoom!.fromPivot }
+    cam = followZoom(cam, 200, 80)
+    expect(cam.zoom!.toPivot).toEqual({ x: 200, y: 80 })
+    expect(cam.zoom!.elapsedMs).toBe(elapsedBefore) // ← 維持される
+    expect(cam.zoom!.fromScale).toBe(fromScaleBefore)
+    expect(cam.zoom!.fromPivot).toEqual(fromPivotBefore)
   })
 })
 
