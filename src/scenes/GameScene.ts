@@ -398,6 +398,9 @@ export class GameScene extends Container {
     this.mapLayer.rotation +=
       this.state.rotation.direction * this.state.rotation.speed * ticker.deltaMS
 
+    // EffectManager は mapLayer の子。テキストだけ counter-rotate して正立を保つ。
+    this.effectManager?.update(this.mapLayer.rotation)
+
     // スポーン
     const map = this.state.map
     const width = map.length * TILE_SIZE
@@ -1290,6 +1293,11 @@ export class GameScene extends Container {
   private attackAt(worldX: number, worldY: number): void {
     if (this.state === null) return
     const zoomMul = getCurrentZoom(this.state.camera)
+    // タップ位置に攻撃範囲リングを表示。
+    // ATTACK_RANGE は mapLayer ローカル座標で固定（zoom で広がらない仕様: CLAUDE.md）。
+    // リング半径も同じ ATTACK_RANGE を使う。リングは mapLayer の子なので zoom 拡大表示は
+    // PixiJS のスケールで自動的に体感サイズに反映される。
+    this.effectManager?.showAttackRange(worldX, worldY, ATTACK_RANGE)
     const result = checkAttackHit(
       this.state,
       worldX,
@@ -1300,17 +1308,26 @@ export class GameScene extends Container {
     )
     if (result.earnedScore > 0) {
       this.state.score += result.earnedScore
+    }
+    // 撃破した敵それぞれの位置で破裂エフェクト + スコア表示
+    for (const d of result.defeatedDetails) {
+      this.effectManager?.showEnemyBurst(d.x, d.y, d.type === 'takokong')
       this.events.emit('score-gain', {
-        x: worldX,
-        y: worldY,
-        score: result.earnedScore,
+        x: d.x,
+        y: d.y,
+        score: d.score,
         combo: 1,
       })
     }
     // #44: 撃破数に応じた演出
     const defeatedCount = result.defeatedEnemyIds.length
     if (defeatedCount >= 2) {
-      this.effectManager?.showMultiHit(worldX, worldY, defeatedCount)
+      // MULTI HIT は敵の重心に出す（タップ位置ではない）
+      const cx =
+        result.defeatedDetails.reduce((s, d) => s + d.x, 0) / defeatedCount
+      const cy =
+        result.defeatedDetails.reduce((s, d) => s + d.y, 0) / defeatedCount
+      this.effectManager?.showMultiHit(cx, cy - 24, defeatedCount)
     } else if (defeatedCount === 0 && result.damagedEnemyIds.length === 0) {
       // 敵にかすりもしなかったタップは MISS 表示
       this.effectManager?.showMiss(worldX, worldY)

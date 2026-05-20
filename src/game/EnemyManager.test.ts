@@ -888,6 +888,48 @@ describe('checkAttackHit', () => {
     expect(result.earnedScore).toBe(ENEMY_SPECS.air.score * 2)
   })
 
+  it('defeatedDetails に撃破敵の座標・タイプ・スコアが入る（zoom 倍率込み）', () => {
+    const state = makeStateWith([
+      {
+        id: 'a1',
+        type: 'air',
+        hp: 1,
+        speed: 0.6,
+        x: 12,
+        y: -8,
+        routeProgress: 0,
+        route: [],
+      },
+      {
+        id: 'a2',
+        type: 'air',
+        hp: 1,
+        speed: 0.6,
+        x: -20,
+        y: 15,
+        routeProgress: 0,
+        route: [],
+      },
+    ])
+    const result = checkAttackHit(state, 0, 0, ATTACK_RANGE, ATTACK_DAMAGE, 2)
+    expect(result.defeatedDetails).toHaveLength(2)
+    const byId = new Map(result.defeatedDetails.map((d) => [d.id, d]))
+    expect(byId.get('a1')).toEqual({
+      id: 'a1',
+      x: 12,
+      y: -8,
+      type: 'air',
+      score: ENEMY_SPECS.air.score * 2,
+    })
+    expect(byId.get('a2')).toEqual({
+      id: 'a2',
+      x: -20,
+      y: 15,
+      type: 'air',
+      score: ENEMY_SPECS.air.score * 2,
+    })
+  })
+
   it('other_house パネル上の敵はスキップ（無敵エリア）', () => {
     // 3x3 マップで中央が other_house、敵をそこに配置
     const map: MapPanel[][] = []

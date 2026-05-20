@@ -393,10 +393,19 @@ export function spawnEnemies(
   return result
 }
 
+export interface DefeatedEnemyDetail {
+  id: string
+  x: number
+  y: number
+  type: EnemyType
+  score: number
+}
+
 export interface AttackHitResult {
   defeatedEnemyIds: string[]
   damagedEnemyIds: string[]
   earnedScore: number
+  defeatedDetails: DefeatedEnemyDetail[]
 }
 
 /**
@@ -417,6 +426,7 @@ export function checkAttackHit(
 ): AttackHitResult {
   const defeated: string[] = []
   const damaged: string[] = []
+  const defeatedDetails: DefeatedEnemyDetail[] = []
   let earned = 0
 
   const map = state.map
@@ -460,6 +470,13 @@ export function checkAttackHit(
           ENEMY_SPECS.takokong.score * zoomMultiplier + TAKOKONG_DEFEAT_BONUS
         earned += score
         defeated.push(enemy.id)
+        defeatedDetails.push({
+          id: enemy.id,
+          x: enemy.x,
+          y: enemy.y,
+          type: enemy.type,
+          score,
+        })
         state.enemies.splice(i, 1)
       } else {
         damaged.push(enemy.id)
@@ -472,6 +489,13 @@ export function checkAttackHit(
       const score = ENEMY_SPECS[enemy.type].score * zoomMultiplier
       earned += score
       defeated.push(enemy.id)
+      defeatedDetails.push({
+        id: enemy.id,
+        x: enemy.x,
+        y: enemy.y,
+        type: enemy.type,
+        score,
+      })
       state.enemies.splice(i, 1)
     } else {
       damaged.push(enemy.id)
@@ -482,5 +506,6 @@ export function checkAttackHit(
     defeatedEnemyIds: defeated,
     damagedEnemyIds: damaged,
     earnedScore: earned,
+    defeatedDetails,
   }
 }

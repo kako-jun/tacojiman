@@ -25,14 +25,14 @@ describe('classifyPointerUp', () => {
   })
 
   it('絶対時刻ベースで差分を見る（オフセットがあっても OK）', () => {
-    expect(classifyPointerUp(1_000_000, 1_000_000 + 299)).toBe('short_tap')
-    expect(classifyPointerUp(1_000_000, 1_000_000 + 301)).toBe('long_release')
+    expect(classifyPointerUp(1_000_000, 1_000_000 + (LONG_PRESS_THRESHOLD_MS - 1))).toBe('short_tap')
+    expect(classifyPointerUp(1_000_000, 1_000_000 + (LONG_PRESS_THRESHOLD_MS + 1))).toBe('long_release')
   })
 })
 
 describe('isLongPressing', () => {
   it('押し下げ時刻からの経過が閾値未満なら false', () => {
-    expect(isLongPressing(0, 100)).toBe(false)
+    expect(isLongPressing(0, LONG_PRESS_THRESHOLD_MS - 1)).toBe(false)
   })
 
   it('閾値ちょうどで true', () => {

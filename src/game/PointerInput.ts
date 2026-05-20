@@ -3,10 +3,10 @@
  * GameScene の federated event ハンドラから切り出して単体テスト可能化する。
  *
  * - 短タップ / 長押し離し の判定は up 時刻 - down 時刻 で行う
- * - 長押しのしきい値は 300ms
+ * - 長押しのしきい値は 180ms（ズーム反応性と通常タップ誤認のバランス点）
  */
 
-export const LONG_PRESS_THRESHOLD_MS = 300
+export const LONG_PRESS_THRESHOLD_MS = 180
 
 export type PointerUpKind = 'short_tap' | 'long_release'
 

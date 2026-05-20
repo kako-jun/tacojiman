@@ -123,6 +123,52 @@ plus the constants `SCREENSHOT_INTERVAL_MS = 60_000` and `SCREENSHOT_MAX_COUNT
 
 These modules import nothing from PixiJS and are covered by dedicated tests.
 
+## Tap Feedback Effects (post-#46)
+
+`src/scenes/EffectManager.ts` is a child container of `mapLayer` (so its
+contents inherit map rotation and translation), with three visual feedback
+families layered on top of the rendering loop:
+
+- `showAttackRange(x, y, radius)` — translucent red disc + stroke that pops
+  from 0.6× to 1.0× in 0.18 s and fades over 0.45 s. Called from
+  `GameScene.attackAt` on every short tap with `ATTACK_RANGE` (the same fixed
+  mapLayer-local distance used by `checkAttackHit`; zoom does **not** widen
+  the hit area per CLAUDE.md, so the ring matches the actual hit circle).
+  Graphics are symmetric, so they ride with the map rotation and stay pinned
+  to the world tap point — this is correct behavior since enemies also ride
+  the map.
+- `showEnemyBurst(x, y, isTakokong?)` — central flash + expanding ring + 8
+  radial particles per defeat. Takokong defeats render with 1.8× scale, 14
+  particles, and pink palette to distinguish boss kills. Same symmetric-on-
+  rotation rationale as the attack ring.
+- Floating texts (`showScoreGain`, `showMiss`, `showMultiHit`,
+  `showScoreLoss`, `showPerfectPierce`) are placed inside a per-label
+  `Container` wrapper. The wrapper position lives in mapLayer-local coords
+  (so it sticks to the world target), but each frame
+  `effectManager.update(mapLayer.rotation)` sets
+  `wrapper.rotation = -parentRotation`. Because the rise tween (`y -= riseBy`)
+  runs in the wrapper's local frame, both the text orientation AND the
+  rise direction stay aligned with screen-up regardless of map rotation.
+  The `MULTI HIT` aggregate label uses `x{count}` (ASCII) instead of `× {count}`
+  to avoid text-renderer fallback splits, with `wordWrap: false` enforced.
+
+`AttackHitResult` now carries `defeatedDetails: DefeatedEnemyDetail[]` (id /
+x / y / type / score, score includes the zoom multiplier and any takokong
+bonus). `GameScene.attackAt` iterates these and emits `score-gain` plus
+`showEnemyBurst` per defeated enemy at the enemy position (rather than once
+at the tap position). The aggregate `MULTI HIT` label is placed at the
+centroid of the defeated enemies, offset by `-24` in mapLayer-local y (the
+wrapper re-orients it to true screen-up).
+
+Bomb / mine / sentry / multi-hit-bomb score-gain emits still fire once at
+the explosion epicenter rather than per defeated enemy — those effects
+already have loud area visuals, and `applyBombDamage` does not currently
+surface per-enemy positions. Aligning them is a follow-up if needed.
+
+`LONG_PRESS_THRESHOLD_MS` was reduced from 300 → 180 ms in
+`src/game/PointerInput.ts` so zoom engages faster on touch while staying
+above the typical short-tap duration to avoid false long-press triggers.
+
 ## Pause Phase (#45)
 
 `GameState.phase` is extended with `'paused'`. `togglePausePhase` flips between
