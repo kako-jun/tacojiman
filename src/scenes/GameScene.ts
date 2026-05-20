@@ -31,6 +31,7 @@ import {
   type GameState,
   type MapPanel,
 } from '../types/GameState'
+import { computeHomeReachPenalty } from '../game/domain/HomeReachPenalty'
 import { findPath, findWaterGoalPanel, findWaterPath } from '../game/map'
 import { KeyboardManager } from '../game/KeyboardManager'
 import {
@@ -1094,32 +1095,20 @@ export class GameScene extends Container {
   }
 
   /**
-   * #44: 敵が家に到達したときの共通処理。
-   * スコアロス点滅 + マップ中央（家）の点滅エフェクトを起こす。
+   * #44 / #28 / #29: 敵が家に到達したときの共通処理。
+   * スコアロス点滅 + マップ中央（家）の点滅エフェクト + playerHp 減算。
+   * HP が 0 になったら ending フェーズへ遷移する。
    */
   private onEnemyReachedHome(enemy: EnemyState): void {
     const state = this.requireState()
-    // スコアロス: 通常敵タイプの score 分を減算（マイナスは出さない）
-    // air は score=3, ground=1, water=2, underground=4, takokong=10
-    let loss: number
-    switch (enemy.type) {
-      case 'water':
-        loss = 2
-        break
-      case 'air':
-        loss = 3
-        break
-      case 'underground':
-        loss = 4
-        break
-      case 'takokong':
-        loss = 10
-        break
-      default:
-        loss = 1
-    }
-    state.score = Math.max(0, state.score - loss)
-    this.effectManager?.showScoreLoss(enemy.x, enemy.y, loss)
+    const result = computeHomeReachPenalty(
+      enemy.type,
+      state.score,
+      state.playerHp
+    )
+    state.score = result.newScore
+    state.playerHp = result.newPlayerHp
+    this.effectManager?.showScoreLoss(enemy.x, enemy.y, result.scoreLoss)
     // 家（mapLayer の 0,0）を白く点滅
     const flash = new Graphics()
     this.effectLayer.addChild(flash)
@@ -1130,6 +1119,11 @@ export class GameScene extends Container {
       duration: 0.4,
       onComplete: () => flash.destroy(),
     })
+    // #28 / #29: HP 0 で即時 ending 遷移
+    if (result.gameOver && state.phase !== 'ending') {
+      state.phase = 'ending'
+      this.onEnding?.(state.score, [...state.screenshots])
+    }
   }
 
   private advanceEnemies(deltaMS: number): void {

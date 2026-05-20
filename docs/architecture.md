@@ -120,6 +120,14 @@ plus the constants `SCREENSHOT_INTERVAL_MS = 60_000` and `SCREENSHOT_MAX_COUNT
 - `DamageCalculator.ts` / `ScoreCalculator.ts` — bomb damage and per-defeat
   score lookups.
 - `TimeManager.ts` — `elapsedMs` → in-game clock conversion.
+- `HomeReachPenalty.ts` (#28 / #29) — when an enemy reaches `player_house`,
+  computes `scoreLoss` (ground=1 / water=2 / air=3 / underground=4 /
+  takokong=10), `hpLoss` (takokong=3, others=1), and a `gameOver` flag
+  (`newPlayerHp <= 0`). `score` and `playerHp` are both clamped at 0.
+  `GameScene.onEnemyReachedHome` consumes this result, mutates
+  `state.score` / `state.playerHp`, and forces `phase = 'ending'` +
+  `onEnding(...)` when `gameOver` is true (one-shot guarded by the
+  existing `phase !== 'ending'` check).
 
 These modules import nothing from PixiJS and are covered by dedicated tests.
 
