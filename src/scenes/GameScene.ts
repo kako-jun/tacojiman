@@ -245,6 +245,8 @@ export class GameScene extends Container {
     this.state = structuredClone(state)
     this.takokongBgmStarted = false
     this.takokongCleanupDone = false
+    // ending → title → game の retry 時もマップ intro アニメを再生する
+    this.introPlayed = false
     this.state.phase = 'playing'
     this.pointerDownAtMs = null
     this.pointerDownPos = null
@@ -627,16 +629,16 @@ export class GameScene extends Container {
 
     // 各種追加描画はローカル中心 (0,0) 基準
     if (panel.type === 'path') {
-      this.drawConnectionLinesLocal(g, panel.connections, 8, COLORS.pathLine)
+      this.drawConnectionLines(g, panel.connections, 8, COLORS.pathLine)
     } else if (panel.type === 'rail') {
-      this.drawConnectionLinesLocal(g, panel.connections, 6, COLORS.railLine)
+      this.drawConnectionLines(g, panel.connections, 6, COLORS.railLine)
       const sleeperOffsets = [-6, 0, 6]
       for (const off of sleeperOffsets) {
         g.rect(-5, off - 2, 10, 4)
         g.fill(COLORS.railSleeper)
       }
     } else if (panel.type === 'station') {
-      this.drawConnectionLinesLocal(g, panel.connections, 6, COLORS.railLine)
+      this.drawConnectionLines(g, panel.connections, 6, COLORS.railLine)
       const platformW = innerSize * 0.7
       const platformH = innerSize * 0.7
       g.rect(-platformW / 2, -platformH / 2, platformW, platformH)
@@ -672,7 +674,7 @@ export class GameScene extends Container {
   /**
    * #53: タイル中心（ローカル原点）基準で接続線を描く。
    */
-  private drawConnectionLinesLocal(
+  private drawConnectionLines(
     g: Graphics,
     connections: MapPanel['connections'],
     lineWidth: number,
