@@ -513,27 +513,7 @@ export class GameScene extends Container {
     if (state.takokongSpawned && !this.takokongCleanupDone) {
       const stillAlive = state.enemies.some((e) => e.type === 'takokong')
       if (!stillAlive) {
-        // takokong が消えた（撃破 or 家到達）
-        this.takokongCleanupDone = true
-        // #37: takokongState を撃破/到達確定状態にする
-        if (state.takokongState !== null) {
-          state.takokongState = {
-            ...state.takokongState,
-            active: false,
-          }
-        }
-        // ズーム解除（戦闘中は固定だったので、scale=1 のまま）
-        state.camera = zoomOut(state.camera, 0)
-        state.camera.scale = 1
-        state.camera.pivot = { x: 0, y: 0 }
-        state.camera.zoom = null
-        this.mapLayer.scale.set(1)
-        this.mapLayer.pivot.set(0, 0)
-        // BGM 停止
-        this.sound?.stopTakokongBgm()
-        // UI 隠す
-        this.takokongHpBar.clear()
-        this.takokongCountdownText.visible = false
+        this.cleanupTakokongSession()
       }
     }
 
@@ -1095,6 +1075,31 @@ export class GameScene extends Container {
   }
 
   /**
+   * #37 + #28: takokong セッション（BGM / カメラズーム固定 / UI）の後片付け。
+   * 撃破・家到達・gameOver のいずれの経路からも 1 回だけ実行する。
+   */
+  private cleanupTakokongSession(): void {
+    const state = this.requireState()
+    if (this.takokongCleanupDone) return
+    this.takokongCleanupDone = true
+    if (state.takokongState !== null) {
+      state.takokongState = {
+        ...state.takokongState,
+        active: false,
+      }
+    }
+    state.camera = zoomOut(state.camera, 0)
+    state.camera.scale = 1
+    state.camera.pivot = { x: 0, y: 0 }
+    state.camera.zoom = null
+    this.mapLayer.scale.set(1)
+    this.mapLayer.pivot.set(0, 0)
+    this.sound?.stopTakokongBgm()
+    this.takokongHpBar.clear()
+    this.takokongCountdownText.visible = false
+  }
+
+  /**
    * #44 / #28 / #29: 敵が家に到達したときの共通処理。
    * スコアロス点滅 + マップ中央（家）の点滅エフェクト + playerHp 減算。
    * HP が 0 になったら ending フェーズへ遷移する。
@@ -1121,6 +1126,11 @@ export class GameScene extends Container {
     })
     // #28 / #29: HP 0 で即時 ending 遷移
     if (result.gameOver && state.phase !== 'ending') {
+      // takokong が原因の gameOver なら、updateGame の cleanup ブロックは
+      // 次フレームで phase!='playing' のため到達しない。ここで先に片付ける。
+      if (enemy.type === 'takokong') {
+        this.cleanupTakokongSession()
+      }
       state.phase = 'ending'
       this.onEnding?.(state.score, [...state.screenshots])
     }
@@ -1161,6 +1171,12 @@ export class GameScene extends Container {
           const last = toPixel(enemy.route[enemy.route.length - 1])
           enemy.x = last.px
           enemy.y = last.py
+          // #28: route 末端（player_house）到達 → ペナルティ + 除去
+          if (enemy.routeProgress >= 1) {
+            this.onEnemyReachedHome(enemy)
+            state.enemies.splice(i, 1)
+            continue
+          }
         } else {
           const from = toPixel(enemy.route[segIndex])
           const to = toPixel(enemy.route[segIndex + 1])

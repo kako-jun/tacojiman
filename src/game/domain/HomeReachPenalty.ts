@@ -17,9 +17,16 @@ export interface HomeReachPenaltyResult {
   gameOver: boolean
 }
 
+/** 網羅性チェック用ヘルパ。新 EnemyType 追加時にコンパイルエラーで気付ける。 */
+function assertNever(x: never): never {
+  throw new Error(`Unhandled enemy type: ${String(x)}`)
+}
+
 /** enemy type → スコア減算量。 */
 function scoreLossFor(type: EnemyType): number {
   switch (type) {
+    case 'ground':
+      return 1
     case 'water':
       return 2
     case 'air':
@@ -29,13 +36,23 @@ function scoreLossFor(type: EnemyType): number {
     case 'takokong':
       return 10
     default:
-      return 1
+      return assertNever(type)
   }
 }
 
 /** enemy type → HP 減算量。 */
 function hpLossFor(type: EnemyType): number {
-  return type === 'takokong' ? 3 : 1
+  switch (type) {
+    case 'ground':
+    case 'water':
+    case 'air':
+    case 'underground':
+      return 1
+    case 'takokong':
+      return 3
+    default:
+      return assertNever(type)
+  }
 }
 
 export function computeHomeReachPenalty(

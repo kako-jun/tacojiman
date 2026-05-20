@@ -80,4 +80,10 @@ describe('computeHomeReachPenalty (#28 #29)', () => {
     expect(r.newScore).toBe(0)
     expect(r.newPlayerHp).toBe(2)
   })
+
+  it('playerHp=1 で通常敵到達はちょうど gameOver（境界値）', () => {
+    const r = computeHomeReachPenalty('ground', 100, 1)
+    expect(r.newPlayerHp).toBe(0)
+    expect(r.gameOver).toBe(true)
+  })
 })
