@@ -131,6 +131,99 @@ plus the constants `SCREENSHOT_INTERVAL_MS = 60_000` and `SCREENSHOT_MAX_COUNT
 
 These modules import nothing from PixiJS and are covered by dedicated tests.
 
+## Map Intro Animation (#53 #57)
+
+`drawMap` in `src/scenes/GameScene.ts` paints the map in two stacked layers
+inside `mapLayer`:
+
+- **`mapGraphics`** — a single Graphics holding only the background fill,
+  drawn as a **circle** (`circle(0, 0, MAP_RADIUS_PX)`) rather than a rect
+  (#57). The earlier "rect sized to cover the view diagonal" approach was
+  rolled back: padding-only background expansion created a visual region
+  with no underlying tile data, forcing spawn / walkability logic to
+  special-case the padded area. The circular approach keeps the data and
+  view consistent: tiles exist or don't.
+- **`tilesContainer`** + **`tileGraphicsList: Graphics[]`** — one Graphics per
+  map panel (#53). Each tile draws in its own local coordinate system (origin
+  at tile center), with `g.x` / `g.y` placed at the tile's world-center
+  (relative to `mapLayer`). This lets `scale` animate around the tile center
+  without needing pivot manipulation. Tiles whose center lies outside
+  `MAP_RADIUS_PX` are skipped in the draw loop (`cx² + cy² > r²`), giving
+  the map a stepped circular silhouette against the black backdrop.
+
+### Circular map geometry (#57)
+
+The view is 400×600 px, so the half-diagonal is `sqrt(200² + 300²) ≈ 360.6`
+px. Any rotation of `mapLayer` exposes up to that much radius at the four
+corners. To keep the background painted over the whole view at every
+rotation, the map needs a radius of at least ≈ 361 px.
+
+The chosen geometry:
+
+| constant         | value | derivation                              |
+| ---------------- | ----- | --------------------------------------- |
+| `MAP_COLS`       | 27    | wraps the inner 19×25 playable area     |
+| `MAP_ROWS`       | 27    | square map so radius is consistent      |
+| `TILE_SIZE`      | 28 px | unchanged                               |
+| `MAP_RADIUS_TILES` | 13.5 | half of `MAP_COLS` / `MAP_ROWS`         |
+| `MAP_RADIUS_PX`  | 378   | `13.5 × 28`; comfortably covers 360.6 px |
+
+`createInitialGameState` now calls `generateMap(27, 27)` and sets
+`player.panelX = player.panelY = 13` (= `floor(MAP_COLS / 2)`). The center
+`(13, 13)` is the `player_house` tile and, in `mapLayer` local coords, sits
+exactly at `(0, 0)` because `drawMap` subtracts `width/2, height/2`.
+
+### Playable area layout (#57)
+
+`getPanelType` was rewritten so that `path` / `rail` / `station` /
+`player_house` **and** `other_house` / `water` / `river` are all expressed
+relative to `centerX` / `centerY` rather than to the absolute `cols` /
+`rows` borders. With this change, calling `generateMap(19, 25)` produces
+exactly the same playable layout as before (so existing direct-call tests
+still pass), and calling `generateMap(27, 27)` produces the same layout
+re-centered inside the larger array with a ring of `rice_field` around it.
+That outer ring is partially drawn (the parts inside the circle) and
+partially hidden (the parts beyond `MAP_RADIUS_PX`).
+
+### Enemy spawn / path implications (#57)
+
+- **ground** — `findPathEdgePosition` only considers `path` tiles. New
+  outer ring is `rice_field`, so spawn candidates stay on the same `path`
+  network as before. Edge spawn for the canonical map is `(0, centerY)`
+  (= `(0, 13)` in 27×27), which is well inside the circle.
+- **water** — `findWaterGoalPanel` and water-network discovery only walk
+  `water` / `river` tiles. Both types live entirely inside the inner
+  playable area, so the outer ring is irrelevant.
+- **underground** — spawn is constrained to `UNDERGROUND_HOUSE_RADIUS = 3`
+  tiles around the player house. That always lies inside the circle, so
+  off-screen spawns are not possible from this path.
+- **air** — samples a uniform angle in `[0, 2π)` and places the enemy at
+  `(cos θ, sin θ) * (MAP_RADIUS_PX + AIR_SPAWN_MARGIN)`, i.e. just outside
+  the circular map edge. The enemy then flies in a straight line toward
+  `(0, 0)` (existing `advanceEnemies` path). This matches the circular
+  silhouette so air enemies appear to break in from the edge of the
+  visible map rather than materializing in a corner of the underlying
+  rectangular grid.
+
+`playMapIntroAnimation()` runs once per `GameScene` instance, gated by an
+`introPlayed: boolean` flag (re-`init` calls during the same scene do not
+replay the intro to avoid flicker). For each tile it computes the radial
+distance from the home (`0,0`):
+
+```
+d = sqrt(g.x^2 + g.y^2)
+delay = (d / TILE_SIZE) * 0.05  // 50 ms per tile of distance
+```
+
+Then `gsap.to` tweens `scale 0→1` (`back.out(2)`) and `alpha 0→1`
+(`power2.out`) with `duration: 0.4`. Tiles closer to the home pop in first;
+the wavefront expands outward.
+
+Rotation is **not** paused during the intro — the dramatic effect of tiles
+materializing while the map already spins is intentional. `tilesContainer` is
+a child of `mapLayer`, so each tile's `scale` is local and unaffected by the
+rotation transform of the parent.
+
 ## Tap Feedback Effects (post-#46)
 
 `src/scenes/EffectManager.ts` is a child container of `mapLayer` (so its

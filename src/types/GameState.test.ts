@@ -27,7 +27,7 @@ describe('createInitialGameState', () => {
     const cloned = JSON.parse(JSON.stringify(state))
 
     expect(cloned.version).toBe(1)
-    expect(cloned.map[9][12].type).toBe('player_house')
+    expect(cloned.map[13][13].type).toBe('player_house')
     expect(Array.isArray(cloned.enemies)).toBe(true)
   })
 })

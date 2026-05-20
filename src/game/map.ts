@@ -272,10 +272,25 @@ function getPanelType(
   if (x === centerX - 5 && y === centerY - 4) return 'station'
   if (x >= centerX - 8 && x <= centerX - 3 && y === centerY - 4) return 'rail'
   if (x === centerX || y === centerY || x === centerX - 3) return 'path'
-  if (x === 2 && y === centerY + 5) return 'other_house'
-  if (x === cols - 4 && y === centerY - 5) return 'other_house'
-  if (x > cols - 5 && y < rows - 8) return 'water'
-  if (x === cols - 6 && y < centerY + 2) return 'river'
+  // #57: 円形マップ化に伴い、other_house/water/river も centerX/centerY 相対で
+  // 配置する（以前は cols/rows の絶対端基準だったので、マップサイズを拡張すると
+  // playable area の外に追いやられてしまった）。
+  // 旧 generateMap(19, 25) の位置と一致するように相対化:
+  //   other_house: (2, 17) = (centerX-7, centerY+5)
+  //   other_house: (cols-4, centerY-5) = (15, 7) = (centerX+6, centerY-5)
+  //   water:       x in [centerX+6 .. centerX+9], y < centerY+5
+  //                （旧: x > cols-5 = x >= 15, y < rows-8 = y < 17）
+  //   river:       x = centerX+4, y < centerY+2
+  //                （旧: x = cols-6 = 13, y < centerY+2 = 14）
+  if (x === centerX - 7 && y === centerY + 5) return 'other_house'
+  if (x === centerX + 6 && y === centerY - 5) return 'other_house'
+  if (x >= centerX + 6 && x <= centerX + 9 && y < centerY + 5) return 'water'
+  if (x === centerX + 4 && y < centerY + 2) return 'river'
+  // 引数 cols, rows は旧実装で other_house/water/river の絶対端配置に使われていたが、
+  // 円形マップ化に伴い centerX/centerY 相対に変更したため不要。
+  // 既存呼び出し互換のため引数自体は残す。
+  void cols
+  void rows
   return 'rice_field'
 }
 
