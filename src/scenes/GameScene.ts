@@ -568,7 +568,16 @@ export class GameScene extends Container {
     this.mapLayer.y = VIEW_HEIGHT / 2
 
     this.mapGraphics.clear()
-    this.mapGraphics.rect(offsetX - 80, offsetY - 80, width + 160, height + 160)
+    // #57: 回転時の四隅に黒地が見えないよう、ビュー対角を覆うサイズで背景塗りする。
+    // 半対角 = sqrt(VIEW_WIDTH^2 + VIEW_HEIGHT^2) / 2 + 余白
+    const viewDiagHalf =
+      Math.ceil(Math.sqrt(VIEW_WIDTH ** 2 + VIEW_HEIGHT ** 2) / 2) + 40
+    this.mapGraphics.rect(
+      -viewDiagHalf,
+      -viewDiagHalf,
+      viewDiagHalf * 2,
+      viewDiagHalf * 2
+    )
     this.mapGraphics.fill(COLORS.background)
 
     for (const col of map) {
