@@ -21,6 +21,7 @@ import {
   togglePausePhase,
   triggerMineIfHit,
   tryBombRecovery,
+  MAP_RADIUS_PX,
   TILE_SIZE,
   VIEW_HEIGHT,
   VIEW_WIDTH,
@@ -578,8 +579,11 @@ export class GameScene extends Container {
     this.mapLayer.x = VIEW_WIDTH / 2
     this.mapLayer.y = VIEW_HEIGHT / 2
 
+    // #57: 円形マップの背景。mapLayer ローカルで (0,0) が player_house 中心。
+    // 半径 MAP_RADIUS_PX の円を塗ることで、回転時の四隅は外側の黒地が見える
+    // ようになり、円形マップが浮いている見た目になる。
     this.mapGraphics.clear()
-    this.mapGraphics.rect(offsetX - 80, offsetY - 80, width + 160, height + 160)
+    this.mapGraphics.circle(0, 0, MAP_RADIUS_PX)
     this.mapGraphics.fill(COLORS.background)
 
     // #53: 既存タイル Graphics を破棄して作り直す
@@ -594,6 +598,10 @@ export class GameScene extends Container {
         // タイル中心の絶対座標（mapLayer ローカル）
         const cx = offsetX + panel.x * TILE_SIZE + TILE_SIZE / 2
         const cy = offsetY + panel.y * TILE_SIZE + TILE_SIZE / 2
+
+        // #57: 円形クリッピング。中心からの距離が MAP_RADIUS_PX を超えるタイルは
+        // 描画しない（データ上は rice_field として残る）。
+        if (cx * cx + cy * cy > MAP_RADIUS_PX * MAP_RADIUS_PX) continue
 
         const g = new Graphics()
         // ローカル座標系で描く: タイル左上 = (-TILE_SIZE/2, -TILE_SIZE/2)

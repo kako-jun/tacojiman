@@ -338,19 +338,20 @@ describe('spawnEnemies — ID フォーマット', () => {
 // ─── スポーン位置 ────────────────────────────────────────────────
 
 describe('spawnEnemies — スポーン位置', () => {
-  it('初期 ground スポーンの位置がマップの端の path タイル付近である（centerY 列 y=12, x=0）', () => {
+  it('初期 ground スポーンの位置がマップの端の path タイル付近である（centerY 行 y=13, x=0）', () => {
     const state = createInitialGameState()
     state.phase = 'playing'
     const result = spawnEnemies(state, 1)
     const grounds = result.filter((e) => e.type === 'ground')
     expect(grounds.length).toBeGreaterThanOrEqual(1)
-    // generateMap(19, 25): centerX=9, centerY=12。x=0, y=12 は path で端からの距離が最小
-    const cols = 19
-    const rows = 25
+    // #57: 円形マップ化で createInitialGameState は generateMap(27, 27) を使う。
+    // centerX=13, centerY=13。x=0, y=13 は path（centerY 行）で端からの距離が最小。
+    const cols = 27
+    const rows = 27
     const offsetX = -(cols * TILE_SIZE) / 2
     const offsetY = -(rows * TILE_SIZE) / 2
     const expectedX = 0 * TILE_SIZE + TILE_SIZE / 2 + offsetX
-    const expectedY = 12 * TILE_SIZE + TILE_SIZE / 2 + offsetY
+    const expectedY = 13 * TILE_SIZE + TILE_SIZE / 2 + offsetY
     for (const g of grounds) {
       expect(g.x).toBeCloseTo(expectedX, 0)
       expect(g.y).toBeCloseTo(expectedY, 0)

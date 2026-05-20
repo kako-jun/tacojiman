@@ -198,6 +198,20 @@ export const VIEW_WIDTH = 400
 export const VIEW_HEIGHT = 600
 export const TILE_SIZE = 28
 
+// #57: 円形マップ。回転時の四隅にビュー対角 sqrt(400^2+600^2)/2 ≈ 360.6px を
+// 覆う必要があるため、マップ実体を 27×27 タイル (756×756 px) に拡張し、
+// 中心から MAP_RADIUS_TILES 以内のタイルだけを描画する。
+// 内側 19×25 の playable area (path/rail/station/player_house/water/river)
+// は新 centerX/centerY に対する相対オフセットで生成されるため幾何構造は維持される。
+export const MAP_COLS = 27
+export const MAP_ROWS = 27
+// 半径 = 13.5 タイル × 28 px = 378 px。view 半対角 ≈ 360.6 px をカバーする。
+export const MAP_RADIUS_TILES = 13.5
+export const MAP_RADIUS_PX = MAP_RADIUS_TILES * TILE_SIZE
+
+const PLAYER_INIT_X = Math.floor(MAP_COLS / 2)
+const PLAYER_INIT_Y = Math.floor(MAP_ROWS / 2)
+
 export function createInitialGameState(): GameState {
   return {
     version: 1,
@@ -208,7 +222,7 @@ export function createInitialGameState(): GameState {
     bombStock: 1,
     selectedBomb: pickRandomBomb(),
     morningStartMinutes: 7 * 60,
-    map: generateMap(19, 25),
+    map: generateMap(MAP_COLS, MAP_ROWS),
     enemies: [],
     camera: {
       x: VIEW_WIDTH / 2,
@@ -223,8 +237,8 @@ export function createInitialGameState(): GameState {
     spawnTimer: 0,
     phase: 'ready',
     player: {
-      panelX: 9,
-      panelY: 12,
+      panelX: PLAYER_INIT_X,
+      panelY: PLAYER_INIT_Y,
       direction: 'south',
       isMoving: false,
     },
