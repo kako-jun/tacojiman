@@ -299,9 +299,13 @@ export class GameScene extends Container {
       const offsetX = -width / 2
       const offsetY = -height / 2
       for (const enemy of this.state.enemies) {
-        // enemy.x/y は mapLayer ローカル座標（offsetX/offsetY ベース）
-        const startX = Math.round((enemy.x - offsetX) / TILE_SIZE)
-        const startY = Math.round((enemy.y - offsetY) / TILE_SIZE)
+        // enemy.x/y は mapLayer ローカル座標（offsetX/offsetY ベース）。
+        // パネル中心は `panelX * TILE_SIZE + TILE_SIZE/2 + offsetX` なので
+        // 逆算は floor((pixel - offsetX) / TILE_SIZE)。Math.round だと
+        // panelX + 0.5 が常に +1 切り上げられ、off-by-one で path 外の
+        // タイルを指して findPath が空配列を返し続けるバグになる。
+        const startX = Math.floor((enemy.x - offsetX) / TILE_SIZE)
+        const startY = Math.floor((enemy.y - offsetY) / TILE_SIZE)
         const route = findPath(
           map,
           { x: startX, y: startY },
@@ -412,8 +416,9 @@ export class GameScene extends Container {
     const newEnemies = spawnEnemies(this.state, ticker.deltaMS)
     for (const e of newEnemies) {
       if (goalPanel) {
-        const startX = Math.round((e.x - offsetX) / TILE_SIZE)
-        const startY = Math.round((e.y - offsetY) / TILE_SIZE)
+        // 上記同様、panel 中心からの逆算は Math.floor を使う。
+        const startX = Math.floor((e.x - offsetX) / TILE_SIZE)
+        const startY = Math.floor((e.y - offsetY) / TILE_SIZE)
         if (e.type === 'ground') {
           const route = findPath(
             map,

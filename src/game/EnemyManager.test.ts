@@ -686,8 +686,8 @@ describe('GameScene 相当のルート組み立て — water/underground 統合'
         const height = map[0].length * TILE_SIZE
         const offsetX = -width / 2
         const offsetY = -height / 2
-        const startX = Math.round((w.x - offsetX) / TILE_SIZE)
-        const startY = Math.round((w.y - offsetY) / TILE_SIZE)
+        const startX = Math.floor((w.x - offsetX) / TILE_SIZE)
+        const startY = Math.floor((w.y - offsetY) / TILE_SIZE)
         const waterGoal = findWaterGoalPanel(map, { x: goal.x, y: goal.y })
         expect(waterGoal).not.toBeNull()
         const route = findWaterPath(map, { x: startX, y: startY }, waterGoal!)
