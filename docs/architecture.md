@@ -153,24 +153,24 @@ inside `mapLayer`:
 
 ### Circular map geometry (#57)
 
-The view is 400×600 px, so the half-diagonal is `sqrt(200² + 300²) ≈ 360.6`
+The view is 640×960 px, so the half-diagonal is `sqrt(320² + 480²) ≈ 576.9`
 px. Any rotation of `mapLayer` exposes up to that much radius at the four
 corners. To keep the background painted over the whole view at every
-rotation, the map needs a radius of at least ≈ 361 px.
+rotation, the map needs a radius of at least ≈ 577 px.
 
 The chosen geometry:
 
 | constant         | value | derivation                              |
 | ---------------- | ----- | --------------------------------------- |
-| `MAP_COLS`       | 27    | wraps the inner 19×25 playable area     |
-| `MAP_ROWS`       | 27    | square map so radius is consistent      |
+| `MAP_COLS`       | 43    | wraps the inner 19×25 playable area     |
+| `MAP_ROWS`       | 43    | square map so radius is consistent      |
 | `TILE_SIZE`      | 28 px | unchanged                               |
-| `MAP_RADIUS_TILES` | 13.5 | half of `MAP_COLS` / `MAP_ROWS`         |
-| `MAP_RADIUS_PX`  | 378   | `13.5 × 28`; comfortably covers 360.6 px |
+| `MAP_RADIUS_TILES` | 21.5 | half of `MAP_COLS` / `MAP_ROWS`         |
+| `MAP_RADIUS_PX`  | 602   | `21.5 × 28`; comfortably covers 576.9 px |
 
-`createInitialGameState` now calls `generateMap(27, 27)` and sets
-`player.panelX = player.panelY = 13` (= `floor(MAP_COLS / 2)`). The center
-`(13, 13)` is the `player_house` tile and, in `mapLayer` local coords, sits
+`createInitialGameState` now calls `generateMap(43, 43)` and sets
+`player.panelX = player.panelY = 21` (= `floor(MAP_COLS / 2)`). The center
+`(21, 21)` is the `player_house` tile and, in `mapLayer` local coords, sits
 exactly at `(0, 0)` because `drawMap` subtracts `width/2, height/2`.
 
 ### Playable area layout (#57)
@@ -180,7 +180,7 @@ exactly at `(0, 0)` because `drawMap` subtracts `width/2, height/2`.
 relative to `centerX` / `centerY` rather than to the absolute `cols` /
 `rows` borders. With this change, calling `generateMap(19, 25)` produces
 exactly the same playable layout as before (so existing direct-call tests
-still pass), and calling `generateMap(27, 27)` produces the same layout
+still pass), and calling `generateMap(43, 43)` produces the same layout
 re-centered inside the larger array with a ring of `rice_field` around it.
 That outer ring is partially drawn (the parts inside the circle) and
 partially hidden (the parts beyond `MAP_RADIUS_PX`).
@@ -190,7 +190,7 @@ partially hidden (the parts beyond `MAP_RADIUS_PX`).
 - **ground** — `findPathEdgePosition` only considers `path` tiles. New
   outer ring is `rice_field`, so spawn candidates stay on the same `path`
   network as before. Edge spawn for the canonical map is `(0, centerY)`
-  (= `(0, 13)` in 27×27), which is well inside the circle.
+  (= `(0, 21)` in 43×43), which is well inside the circle.
 - **water** — `findWaterGoalPanel` and water-network discovery only walk
   `water` / `river` tiles. Both types live entirely inside the inner
   playable area, so the outer ring is irrelevant.

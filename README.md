@@ -80,6 +80,8 @@ npm run format:check
 
 `GameState` はプレーンなオブジェクトとして定義し、`GameScene.initWithState(state)` で任意局面から起動できる構成にしています。「状態生成 → PixiJS描画」の流れを保つことで、デバッグとテストを容易にしています（純粋ドメイン層は `src/game/domain/` に集約）。
 
+表示は縦長ゲーム共通の 640×960 (2:3) を論理解像度にします。canvas は CSS で拡大せず、`src/main.ts` の `renderer.resize()` と `stage.scale` で viewport に収まる実 canvas サイズへ合わせます。
+
 ## 📖 詳細仕様
 
 詳細なゲーム仕様については [CLAUDE.md](./CLAUDE.md) を参照してください。

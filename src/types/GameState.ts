@@ -194,19 +194,19 @@ export const TAKOKONG_SPAWN_AT_MS = 170_000
 // カウントダウン演出開始タイミング（残り 10s から）
 export const TAKOKONG_COUNTDOWN_START_MS = 170_000
 
-export const VIEW_WIDTH = 400
-export const VIEW_HEIGHT = 600
+export const VIEW_WIDTH = 640
+export const VIEW_HEIGHT = 960
 export const TILE_SIZE = 28
 
-// #57: 円形マップ。回転時の四隅にビュー対角 sqrt(400^2+600^2)/2 ≈ 360.6px を
-// 覆う必要があるため、マップ実体を 27×27 タイル (756×756 px) に拡張し、
+// #57: 円形マップ。回転時の四隅にビュー対角 sqrt(640^2+960^2)/2 ≈ 576.9px を
+// 覆う必要があるため、マップ実体を 43×43 タイル (1204×1204 px) に拡張し、
 // 中心から MAP_RADIUS_TILES 以内のタイルだけを描画する。
 // 内側 19×25 の playable area (path/rail/station/player_house/water/river)
 // は新 centerX/centerY に対する相対オフセットで生成されるため幾何構造は維持される。
-export const MAP_COLS = 27
-export const MAP_ROWS = 27
-// 半径 = 13.5 タイル × 28 px = 378 px。view 半対角 ≈ 360.6 px をカバーする。
-export const MAP_RADIUS_TILES = 13.5
+export const MAP_COLS = 43
+export const MAP_ROWS = 43
+// 半径 = 21.5 タイル × 28 px = 602 px。view 半対角 ≈ 576.9 px をカバーする。
+export const MAP_RADIUS_TILES = 21.5
 export const MAP_RADIUS_PX = MAP_RADIUS_TILES * TILE_SIZE
 
 const PLAYER_INIT_X = Math.floor(MAP_COLS / 2)
